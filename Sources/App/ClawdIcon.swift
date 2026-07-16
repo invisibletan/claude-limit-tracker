@@ -7,9 +7,9 @@ enum ClawdIcon {
     static let coral = NSColor(srgbRed: 0xCC / 255, green: 0x6B / 255, blue: 0x4E / 255, alpha: 1)
     static let eye = NSColor(srgbRed: 0.09, green: 0.07, blue: 0.06, alpha: 1)
 
-    // Grid the critter is laid out on — wide and chunky, short legs.
-    private static let gridW = 16.0
-    private static let gridH = 12.0
+    // Grid = the reference sprite's measured pixels (176×120, ratio ≈ 1.467).
+    private static let gridW = 176.0
+    private static let gridH = 120.0
 
     /// Just the critter, animated by walk `phase` (0–1). Image is wider than tall.
     static func sprite(phase: Double, height: CGFloat) -> NSImage {
@@ -67,7 +67,7 @@ enum ClawdIcon {
     private static func drawClawd(ctx: CGContext, rect: CGRect, phase: Double) {
         let px = rect.width / CGFloat(gridW)
         let s = sin(phase * 2 * .pi)
-        let bob = s * 0.3
+        let bob = s * 3.0   // in reference-pixel units
 
         func fill(_ x: Double, _ y: Double, _ w: Double, _ h: Double) {
             ctx.fill(CGRect(
@@ -78,27 +78,28 @@ enum ClawdIcon {
             ))
         }
 
-        // Flat coral throughout, matching the reference's uniform pixel art.
+        // Coordinates below are the reference sprite's exact measured pixels
+        // (y-up). Bands are 24px tall: legs 0–24, lower body, nubs 48–72,
+        // eyes 72–96, body top. Legs sit in two pairs with a wide centre gap.
         coral.setFill()
 
-        // Legs — four EQUAL stubs cut from the body bottom: equal width (1.8)
-        // and equal gaps (1.6), with the outer two FLUSH to the body edges
-        // (x2 and x14) so the body's side edges run straight down into them.
-        let liftA = max(0, s) * 0.7
-        let liftB = max(0, -s) * 0.7
-        fill(2.0, 0.2 + liftA, 1.8, 2.3 - liftA)    // flush left  (group A)
-        fill(8.8, 0.2 + liftA, 1.8, 2.3 - liftA)    // group A
-        fill(5.4, 0.2 + liftB, 1.8, 2.3 - liftB)    // group B
-        fill(12.2, 0.2 + liftB, 1.8, 2.3 - liftB)   // flush right (group B)
+        // Legs — two pairs (inset from the edges) with a wide centre gap;
+        // groups alternate lifting to read as a walk.
+        let liftA = max(0, s) * 6
+        let liftB = max(0, -s) * 6
+        fill(33, 0 + liftA, 11, 24 - liftA)    // group A
+        fill(110, 0 + liftA, 11, 24 - liftA)
+        fill(55, 0 + liftB, 11, 24 - liftB)    // group B
+        fill(132, 0 + liftB, 11, 24 - liftB)
 
-        // Body: one fat rectangle (x2–14) + side nubs.
-        fill(2.0, 2.3, 12.0, 9.7)      // torso + head
-        fill(0.0, 5.0, 2.0, 3.0)       // left nub
-        fill(14.0, 5.0, 2.0, 3.0)      // right nub
+        // Body + side nubs.
+        fill(22, 24, 131, 96)          // torso + head
+        fill(0, 48, 22, 24)            // left nub
+        fill(154, 48, 22, 24)          // right nub
 
         // Eyes.
         eye.setFill()
-        fill(4.6, 8.4, 1.9, 2.2)
-        fill(9.5, 8.4, 1.9, 2.2)
+        fill(44, 72, 11, 24)
+        fill(121, 72, 11, 24)
     }
 }
