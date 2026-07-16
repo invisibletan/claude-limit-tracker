@@ -14,7 +14,7 @@ enum PrefKey {
 final class UsageStore: ObservableObject {
     @Published var snapshot: UsageSnapshot?
     @Published var lastError: String?
-    /// Non-fatal: official API failed but the estimate fallback still rendered.
+    /// Non-fatal: the token check failed but the estimate fallback still rendered.
     @Published var officialWarning: String?
     @Published var isRefreshing = false
 
@@ -36,10 +36,14 @@ final class UsageStore: ObservableObject {
     }
 
     private func registerDefaults() {
+        // Caps calibrated to a Max 20× plan so the estimate tracks the real
+        // Settings → Usage page: weekly ~$9,000 maps ~$458 spent to ~5%,
+        // 5-hour ~$35 maps a hot session to ~20%. Tunable in Preferences.
         UserDefaults.standard.register(defaults: [
             PrefKey.cap5h: 35.0,
-            PrefKey.capWeekly: 500.0,
-            PrefKey.refreshInterval: 30.0,
+            PrefKey.capWeekly: 9000.0,
+            // Each official read spends ~1 token; 60s keeps that negligible.
+            PrefKey.refreshInterval: 60.0,
         ])
     }
 
@@ -55,20 +59,19 @@ final class UsageStore: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // 1. Exact numbers from claude.ai via the in-app web session.
-        var webWindows: [WebWindow]?
+        // 1. Exact 5h/weekly from the rate-limit headers, if a token is stored.
+        var official: OfficialUsage?
         var officialErr: String?
-        switch await WebUsageReader.shared.fetchOfficial() {
-        case .windows(let windows):
-            webWindows = windows
-        case .needsLogin:
-            officialErr = "Sign in from Preferences for exact numbers."
-        case .unavailable:
-            // Silent: fall back to estimates without nagging.
-            break
+        if let token = TokenStore.load() {
+            do {
+                official = try await RateLimitUsage.fetchUsage(token: token)
+            } catch {
+                officialErr = error.localizedDescription
+            }
         }
 
-        // 2. Local estimate — cost detail + burn rate, and the sole source when signed out.
+        // 2. Local estimate from ccusage — cost detail, burn rate, and the
+        // meters/percentages used when no token is configured.
         let runner = CCUsageRunner(overridePath: UserDefaults.standard.string(forKey: PrefKey.ccusagePath))
         var block: CCUsage.ActiveBlock?
         var weeklyCost: Double?
@@ -89,27 +92,19 @@ final class UsageStore: ObservableObject {
         officialWarning = officialErr
 
         let estimateAvailable = blockSucceeded || weeklyCost != nil
-        if webWindows == nil && !estimateAvailable {
-            // Both sources failed — keep the stale snapshot visible, surface the error.
+        if official == nil && !estimateAvailable {
+            // Keep the stale snapshot visible, surface the error.
             lastError = officialErr ?? estimateErr ?? "No usage data available."
             return
         }
 
         // Partial estimate failure renders as a footnote under the meters.
         lastError = estimateErr
-        if let webWindows {
-            snapshot = SnapshotBuilder.buildFromWeb(
-                windows: webWindows,
-                block: block,
-                weeklyCostUSD: weeklyCost
-            )
-        } else {
-            snapshot = SnapshotBuilder.build(
-                official: nil,
-                block: block,
-                weeklyCostUSD: weeklyCost,
-                caps: caps
-            )
-        }
+        snapshot = SnapshotBuilder.build(
+            official: official,
+            block: block,
+            weeklyCostUSD: weeklyCost,
+            caps: caps
+        )
     }
 }

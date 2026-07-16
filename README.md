@@ -13,25 +13,19 @@ open "build/Claude Usage Tracker.app"
 
 Requires Xcode command line tools (Swift 5.9+, macOS 14+).
 
-## Data sources
+## How it works
 
-The app merges two sources, best-available wins:
+The app reads your local usage with [ccusage](https://github.com/ryoppippi/ccusage) (over the `~/.claude` logs Claude already writes) and shows it as a share of caps you set — with live cost, burn rate, projections, and reset countdowns. Fully offline, no credentials.
 
-| Source | What it gives | Setup |
-| --- | --- | --- |
-| **Official Anthropic usage API** (`api.anthropic.com/api/oauth/usage`) | The exact 5-hour / weekly percentages and reset times shown at claude.ai → Settings → Usage | Run `claude setup-token` in a terminal, paste the token into Preferences → "Save & test" |
-| **Local estimate** (ccusage over `~/.claude` logs) | Cost, tokens, burn rate, projections; percentages measured against caps you set | Works out of the box if [ccusage](https://github.com/ryoppippi/ccusage) is installed |
+### Why an estimate, not the exact numbers?
 
-With a token configured, percentages/resets come from the official API and cost detail/burn rate from ccusage. Without one, everything is estimated locally — fully offline.
+The precise figures on claude.ai → Settings → Usage come from an Anthropic account API that is gated to Claude Code and claude.ai only — third-party apps can't read it. (`claude setup-token` yields a `user:inference`-scoped token that the usage endpoint rejects with 403; the properly-scoped token lives in the Keychain, which this app deliberately never touches per corporate EDR policy.) So the tracker estimates: it divides ccusage's cost by a cap you calibrate.
 
-### Why paste a token instead of auto-detecting it?
-
-On macOS, Claude Code stores its OAuth credentials in the Keychain. This app deliberately never touches the Keychain (corporate EDR policy). The token you paste is kept in `~/Library/Application Support/ClaudeUsageTracker/token` with `0600` permissions; clear it anytime from Preferences.
+**Calibrate once:** open Preferences and set each cap so the reading roughly matches your real usage page (defaults target a Max 20× plan: 5-hour $35, weekly $9,000). For the exact numbers any time, use **Open claude.ai usage page** in the menu — it opens Settings → Usage in your browser, where the figures are authoritative.
 
 ## Preferences
 
-- **OAuth token** — enables official mode (save & test inline)
-- **Estimate caps** — 5-hour and weekly USD ceilings used when no token is set (defaults: $35 / $500 — tune to where your plan actually cuts you off)
+- **Estimate caps** — 5-hour and weekly USD ceilings the percentages are measured against (defaults $35 / $9,000; tune to match your usage page)
 - **Refresh interval** — default 30 s
 - **ccusage path** — auto-detected (Homebrew, bun, npm); override if installed elsewhere
 - **Launch at login** — via `SMAppService`

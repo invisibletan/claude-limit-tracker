@@ -18,8 +18,6 @@ public enum HealthState: Sendable {
 public enum UsageSource: Sendable {
     /// Anthropic's OAuth usage endpoint — the same data as claude.ai Settings → Usage.
     case officialAPI
-    /// Read live off claude.ai Settings → Usage via the app's own web session.
-    case webSession
     /// Estimated from local `~/.claude` JSONL logs via ccusage, measured against user-set caps.
     case localEstimate
 }
@@ -77,20 +75,6 @@ public struct UsageSnapshot: Sendable {
         self.burnRateText = burnRateText
         self.source = source
         self.updatedAt = updatedAt
-    }
-}
-
-/// A usage window read off the claude.ai Settings → Usage page.
-public struct WebWindow: Sendable, Codable, Equatable {
-    public var label: String
-    /// 0–100.
-    public var percent: Double
-    public var resetText: String
-
-    public init(label: String, percent: Double, resetText: String) {
-        self.label = label
-        self.percent = percent
-        self.resetText = resetText
     }
 }
 

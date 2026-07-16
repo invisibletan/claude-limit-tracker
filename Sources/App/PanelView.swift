@@ -42,7 +42,7 @@ struct PanelView: View {
             }
 
             if let warning = store.officialWarning {
-                Text("Official API: \(warning)")
+                Text(warning)
                     .font(.caption2)
                     .foregroundStyle(.orange)
             }
@@ -76,22 +76,17 @@ struct PanelView: View {
 
     @ViewBuilder
     private func sourceFootnote(_ snapshot: UsageSnapshot) -> some View {
-        Text(sourceLabel(snapshot.source))
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-
-        if snapshot.source == .localEstimate {
-            Text("Exact numbers: sign in from Preferences")
+        if snapshot.source == .officialAPI {
+            Text("Official Anthropic usage (live)")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        } else {
+            Text("Estimated from local logs vs. your caps")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            Text("Exact numbers: add a token in Preferences")
                 .font(.caption2)
                 .foregroundStyle(.orange)
-        }
-    }
-
-    private func sourceLabel(_ source: UsageSource) -> String {
-        switch source {
-        case .officialAPI: return "Official Anthropic usage data"
-        case .webSession: return "Live from claude.ai (your session)"
-        case .localEstimate: return "Estimated from local logs vs. your caps"
         }
     }
 

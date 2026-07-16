@@ -6,13 +6,13 @@ struct PreferencesView: View {
     @ObservedObject var store: UsageStore
 
     @AppStorage(PrefKey.cap5h) private var cap5h = 35.0
-    @AppStorage(PrefKey.capWeekly) private var capWeekly = 500.0
+    @AppStorage(PrefKey.capWeekly) private var capWeekly = 9000.0
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval = 30.0
     @AppStorage(PrefKey.ccusagePath) private var ccusagePath = ""
 
-    @State private var signedIn = false
-    @State private var authStatus: String?
-    @State private var authStatusIsError = false
+    @State private var tokenInput = TokenStore.load() ?? ""
+    @State private var tokenStatus: String?
+    @State private var tokenStatusIsError = false
     @State private var isWorking = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -28,36 +28,25 @@ struct PreferencesView: View {
             .padding(.top, 16)
 
             Form {
-                Section("Official usage data (recommended)") {
+                Section("Official usage (recommended)") {
+                    SecureField("Token", text: $tokenInput, prompt: Text("paste from `claude setup-token`"))
                     HStack {
-                        if signedIn {
-                            Label("Signed in to Claude", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        } else {
-                            Label("Not signed in", systemImage: "person.crop.circle.badge.questionmark")
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button(signedIn ? "Check now" : "Sign in to Claude…") {
-                            signedIn ? checkNow() : showLogin()
-                        }
-                        .disabled(isWorking)
-                        if signedIn {
-                            Button("Sign out") { signOut() }
+                        Button("Save & test") { saveAndTest() }
+                            .disabled(isWorking)
+                        Button("Clear") { clearToken() }
+                        if let tokenStatus {
+                            Text(tokenStatus)
+                                .font(.caption)
+                                .foregroundStyle(tokenStatusIsError ? .red : .green)
+                                .textSelection(.enabled)
                         }
                     }
-                    if let authStatus {
-                        Text(authStatus)
-                            .font(.caption)
-                            .foregroundStyle(authStatusIsError ? .red : .green)
-                            .textSelection(.enabled)
-                    }
-                    Text("Sign in to claude.ai in a window inside this app, then click Check now. Use **Continue with email** — claude.ai emails a 6-digit code you enter right in the window. Google sign-in won't work here (Google blocks embedded windows). The app then reads your live 5-hour, weekly, and per-model limits straight off Settings → Usage; the session stays in the app's own storage.")
+                    Text("Run `claude setup-token` in a terminal and paste the result here. The app then reads your exact 5-hour and weekly limits from Anthropic's rate-limit headers — the same numbers as claude.ai Settings → Usage. Each refresh makes one tiny (1-token) API call to read them. Stored in a chmod-600 file, never the Keychain.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Estimate caps (used when signed out)") {
+                Section("Estimate caps (used without a token)") {
                     HStack {
                         Text("5-hour cap")
                         TextField("USD", value: $cap5h, format: .number)
@@ -70,7 +59,7 @@ struct PreferencesView: View {
                             .frame(width: 90)
                         Text("USD")
                     }
-                    Text("Percentages in estimate mode are cost ÷ cap — a rough proxy only; sign in above for real numbers.")
+                    Text("The tracker reads your local usage with ccusage and shows it as a share of these caps. The percentages are an estimate — Anthropic doesn't expose the exact figures to third-party apps. Tune each cap so the reading roughly matches claude.ai Settings → Usage. For the exact numbers, use “Open claude.ai usage page” in the menu.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -96,55 +85,47 @@ struct PreferencesView: View {
         }
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
-        .onAppear { refreshSignInState() }
     }
 
-    private func showLogin() {
-        authStatus = "Sign in in the window, then click Check now."
-        authStatusIsError = false
-        WebUsageReader.shared.showLogin()
-    }
-
-    private func checkNow() {
+    private func saveAndTest() {
+        do {
+            try TokenStore.save(tokenInput)
+        } catch {
+            tokenStatus = "Could not save: \(error.localizedDescription)"
+            tokenStatusIsError = true
+            return
+        }
+        guard let token = TokenStore.load() else {
+            tokenStatus = "Token cleared — using local estimates."
+            tokenStatusIsError = false
+            return
+        }
         isWorking = true
-        authStatus = "Reading claude.ai…"
-        authStatusIsError = false
+        tokenStatus = "Testing…"
+        tokenStatusIsError = false
         Task {
             defer { isWorking = false }
-            switch await WebUsageReader.shared.fetchOfficial() {
-            case .windows(let windows):
-                signedIn = true
-                let summary = windows
-                    .map { "\($0.label) \(Format.percent($0.percent))" }
+            do {
+                let usage = try await RateLimitUsage.fetchUsage(token: token)
+                let summary = usage.windows
+                    .map { "\($0.label) \(Format.percent($0.utilization))" }
                     .joined(separator: ", ")
-                authStatus = "Connected — \(summary)."
-                authStatusIsError = false
+                tokenStatus = "Connected — \(summary)."
+                tokenStatusIsError = false
                 await store.refresh()
-            case .needsLogin:
-                signedIn = false
-                authStatus = "Not signed in yet — click Sign in to Claude."
-                authStatusIsError = true
-            case .unavailable(let message):
-                authStatus = message
-                authStatusIsError = true
+            } catch {
+                tokenStatus = error.localizedDescription
+                tokenStatusIsError = true
             }
         }
     }
 
-    private func refreshSignInState() {
-        Task { signedIn = await WebUsageReader.shared.hasSession() }
-    }
-
-    private func signOut() {
-        isWorking = true
-        Task {
-            defer { isWorking = false }
-            await WebUsageReader.shared.signOut()
-            signedIn = false
-            authStatus = "Signed out — using local estimates."
-            authStatusIsError = false
-            await store.refresh()
-        }
+    private func clearToken() {
+        tokenInput = ""
+        TokenStore.clear()
+        tokenStatus = "Token cleared — using local estimates."
+        tokenStatusIsError = false
+        Task { await store.refresh() }
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {

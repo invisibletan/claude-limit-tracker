@@ -43,62 +43,6 @@ public enum SnapshotBuilder {
         )
     }
 
-    /// Builds a snapshot from windows scraped off claude.ai Settings → Usage,
-    /// keeping ccusage's burn rate / cost detail for context.
-    public static func buildFromWeb(
-        windows: [WebWindow],
-        block: CCUsage.ActiveBlock?,
-        weeklyCostUSD: Double?,
-        now: Date = Date()
-    ) -> UsageSnapshot {
-        func meter(for window: WebWindow, costDetail: String = "") -> Meter {
-            Meter(
-                percent: min(100, max(0, window.percent)),
-                detail: costDetail,
-                resetText: window.resetText
-            )
-        }
-
-        // Map the page's labels onto the two headline meters; the rest become extras.
-        var fiveHour: Meter?
-        var weekly: Meter?
-        var extras: [ExtraMeter] = []
-
-        var fiveHourDetail = ""
-        if let block {
-            fiveHourDetail = "\(Format.money(block.costUSD)) used"
-            if let projected = block.projectedCostUSD {
-                fiveHourDetail += " · projected \(Format.money(projected))"
-            }
-        }
-        let weeklyDetail = weeklyCostUSD.map { "\(Format.money($0)) used" } ?? ""
-
-        for window in windows {
-            let lower = window.label.lowercased()
-            if fiveHour == nil, lower.contains("session") || lower.contains("5-hour") || lower.contains("5 hour") {
-                fiveHour = meter(for: window, costDetail: fiveHourDetail)
-            } else if weekly == nil, lower.contains("all models") || lower.contains("weekly") {
-                weekly = meter(for: window, costDetail: weeklyDetail)
-            } else {
-                extras.append(ExtraMeter(title: window.label, meter: meter(for: window)))
-            }
-        }
-
-        var burnRateText: String?
-        if let tpm = block?.tokensPerMinute {
-            burnRateText = Format.tokensPerMinute(tpm)
-        }
-
-        return UsageSnapshot(
-            fiveHour: fiveHour ?? Meter(percent: nil, detail: fiveHourDetail, resetText: ""),
-            weekly: weekly ?? Meter(percent: nil, detail: weeklyDetail, resetText: ""),
-            extraMeters: extras,
-            burnRateText: burnRateText,
-            source: .webSession,
-            updatedAt: now
-        )
-    }
-
     static func fiveHourMeter(
         official: OfficialUsage?,
         block: CCUsage.ActiveBlock?,
