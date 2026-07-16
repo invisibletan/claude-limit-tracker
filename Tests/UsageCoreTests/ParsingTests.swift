@@ -188,6 +188,40 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         #expect(snapshot.fiveHour.detail == "no active session")
         #expect(snapshot.burnRateText == nil)
     }
+
+    @Test func buildFromWebMapsLabels() throws {
+        let block = try #require(try CCUsage.parseActiveBlock(blocksJSON))
+        let windows = [
+            WebWindow(label: "Current session", percent: 19, resetText: "Resets in 2 hr 45 min"),
+            WebWindow(label: "All models", percent: 5, resetText: "Resets Sat 7:59 PM"),
+            WebWindow(label: "Fable", percent: 10, resetText: "Resets Sat 7:59 PM"),
+        ]
+        let snapshot = SnapshotBuilder.buildFromWeb(windows: windows, block: block, weeklyCostUSD: 458.89)
+        #expect(snapshot.source == .webSession)
+        #expect(snapshot.fiveHour.percent == 19)
+        #expect(snapshot.fiveHour.resetText == "Resets in 2 hr 45 min")
+        // Cost detail from ccusage is retained on the 5-hour meter.
+        #expect(snapshot.fiveHour.detail.contains("$23.54 used"))
+        #expect(snapshot.weekly.percent == 5)
+        #expect(snapshot.weekly.detail.contains("$458.89 used"))
+        // Model-specific window becomes an extra meter.
+        #expect(snapshot.extraMeters.count == 1)
+        #expect(snapshot.extraMeters[0].title == "Fable")
+        #expect(snapshot.extraMeters[0].meter.percent == 10)
+        // Burn rate still surfaces.
+        #expect(snapshot.burnRateText == "120.3k tok/min")
+    }
+
+    @Test func buildFromWebClampsAndHandlesMissing() {
+        let snapshot = SnapshotBuilder.buildFromWeb(
+            windows: [WebWindow(label: "Current session", percent: 140, resetText: "")],
+            block: nil,
+            weeklyCostUSD: nil
+        )
+        #expect(snapshot.fiveHour.percent == 100)      // clamped
+        #expect(snapshot.weekly.percent == nil)        // no weekly window provided
+        #expect(snapshot.burnRateText == nil)
+    }
 }
 
 @Suite struct FormattingTests {

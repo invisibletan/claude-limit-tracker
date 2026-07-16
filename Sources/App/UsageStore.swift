@@ -55,28 +55,20 @@ final class UsageStore: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // 1. Official percentages, if the user has signed in.
-        var official: OfficialUsage?
+        // 1. Exact numbers from claude.ai via the in-app web session.
+        var webWindows: [WebWindow]?
         var officialErr: String?
-        if var creds = TokenStore.loadCredentials() {
-            if creds.needsRefresh, let refreshToken = creds.refreshToken {
-                do {
-                    creds = try await ClaudeOAuth.refresh(refreshToken: refreshToken)
-                    try? TokenStore.save(creds)
-                } catch {
-                    officialErr = "Session refresh failed — \(error.localizedDescription)"
-                }
-            }
-            if officialErr == nil {
-                do {
-                    official = try await OfficialAPI.fetch(token: creds.accessToken)
-                } catch {
-                    officialErr = error.localizedDescription
-                }
-            }
+        switch await WebUsageReader.shared.fetchOfficial() {
+        case .windows(let windows):
+            webWindows = windows
+        case .needsLogin:
+            officialErr = "Sign in from Preferences for exact numbers."
+        case .unavailable:
+            // Silent: fall back to estimates without nagging.
+            break
         }
 
-        // 2. Local estimate — cost detail + burn rate, and the sole source without a token.
+        // 2. Local estimate — cost detail + burn rate, and the sole source when signed out.
         let runner = CCUsageRunner(overridePath: UserDefaults.standard.string(forKey: PrefKey.ccusagePath))
         var block: CCUsage.ActiveBlock?
         var weeklyCost: Double?
@@ -97,7 +89,7 @@ final class UsageStore: ObservableObject {
         officialWarning = officialErr
 
         let estimateAvailable = blockSucceeded || weeklyCost != nil
-        if official == nil && !estimateAvailable {
+        if webWindows == nil && !estimateAvailable {
             // Both sources failed — keep the stale snapshot visible, surface the error.
             lastError = officialErr ?? estimateErr ?? "No usage data available."
             return
@@ -105,11 +97,19 @@ final class UsageStore: ObservableObject {
 
         // Partial estimate failure renders as a footnote under the meters.
         lastError = estimateErr
-        snapshot = SnapshotBuilder.build(
-            official: official,
-            block: block,
-            weeklyCostUSD: weeklyCost,
-            caps: caps
-        )
+        if let webWindows {
+            snapshot = SnapshotBuilder.buildFromWeb(
+                windows: webWindows,
+                block: block,
+                weeklyCostUSD: weeklyCost
+            )
+        } else {
+            snapshot = SnapshotBuilder.build(
+                official: nil,
+                block: block,
+                weeklyCostUSD: weeklyCost,
+                caps: caps
+            )
+        }
     }
 }

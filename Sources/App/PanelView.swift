@@ -76,16 +76,22 @@ struct PanelView: View {
 
     @ViewBuilder
     private func sourceFootnote(_ snapshot: UsageSnapshot) -> some View {
-        Text(snapshot.source == .officialAPI
-             ? "Official Anthropic usage data"
-             : "Estimated from local logs vs. your caps")
+        Text(sourceLabel(snapshot.source))
             .font(.caption2)
             .foregroundStyle(.tertiary)
 
         if snapshot.source == .localEstimate {
-            Text("Exact numbers: sign in with Claude from Preferences")
+            Text("Exact numbers: sign in from Preferences")
                 .font(.caption2)
                 .foregroundStyle(.orange)
+        }
+    }
+
+    private func sourceLabel(_ source: UsageSource) -> String {
+        switch source {
+        case .officialAPI: return "Official Anthropic usage data"
+        case .webSession: return "Live from claude.ai (your session)"
+        case .localEstimate: return "Estimated from local logs vs. your caps"
         }
     }
 

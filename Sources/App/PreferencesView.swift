@@ -10,9 +10,7 @@ struct PreferencesView: View {
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval = 30.0
     @AppStorage(PrefKey.ccusagePath) private var ccusagePath = ""
 
-    @State private var pkce: ClaudeOAuth.PKCE?
-    @State private var pastedCode = ""
-    @State private var signedIn = TokenStore.loadCredentials() != nil
+    @State private var signedIn = false
     @State private var authStatus: String?
     @State private var authStatusIsError = false
     @State private var isWorking = false
@@ -31,22 +29,21 @@ struct PreferencesView: View {
 
             Form {
                 Section("Official usage data (recommended)") {
-                    if signedIn {
-                        HStack {
-                            Label("Signed in with Claude", systemImage: "checkmark.circle.fill")
+                    HStack {
+                        if signedIn {
+                            Label("Signed in to Claude", systemImage: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
-                            Spacer()
-                            Button("Test connection") { testConnection() }
-                                .disabled(isWorking)
-                            Button("Sign out") { signOut() }
+                        } else {
+                            Label("Not signed in", systemImage: "person.crop.circle.badge.questionmark")
+                                .foregroundStyle(.secondary)
                         }
-                    } else {
-                        Button("Sign in with Claude…") { startSignIn() }
-                        if pkce != nil {
-                            TextField("Paste the code shown after approving", text: $pastedCode)
-                                .textFieldStyle(.roundedBorder)
-                            Button("Complete sign-in") { completeSignIn() }
-                                .disabled(pastedCode.trimmingCharacters(in: .whitespaces).isEmpty || isWorking)
+                        Spacer()
+                        Button(signedIn ? "Check now" : "Sign in to Claude…") {
+                            signedIn ? checkNow() : showLogin()
+                        }
+                        .disabled(isWorking)
+                        if signedIn {
+                            Button("Sign out") { signOut() }
                         }
                     }
                     if let authStatus {
@@ -55,7 +52,7 @@ struct PreferencesView: View {
                             .foregroundStyle(authStatusIsError ? .red : .green)
                             .textSelection(.enabled)
                     }
-                    Text("Signing in opens claude.ai in your browser (same OAuth flow Claude Code uses). Approve, copy the code it shows, and paste it here. Percentages and reset times then come straight from Anthropic — identical to claude.ai Settings → Usage. Credentials live in a chmod-600 file, never the Keychain.")
+                    Text("Sign in to claude.ai in a window inside this app. The app then reads your live 5-hour and weekly limits straight off Settings → Usage — the exact numbers you see there, per-model included. The session stays in the app's own storage; nothing is copied elsewhere. Click Check now after signing in.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -99,80 +96,55 @@ struct PreferencesView: View {
         }
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+        .onAppear { refreshSignInState() }
     }
 
-    private func startSignIn() {
-        let fresh = ClaudeOAuth.generatePKCE()
-        pkce = fresh
-        pastedCode = ""
-        authStatus = "Browser opened — approve, then paste the code below."
+    private func showLogin() {
+        authStatus = "Sign in in the window, then click Check now."
         authStatusIsError = false
-        NSWorkspace.shared.open(ClaudeOAuth.authorizeURL(pkce: fresh))
+        WebUsageReader.shared.showLogin()
     }
 
-    private func completeSignIn() {
-        guard let pkce else { return }
+    private func checkNow() {
         isWorking = true
-        authStatus = "Exchanging code…"
+        authStatus = "Reading claude.ai…"
         authStatusIsError = false
         Task {
             defer { isWorking = false }
-            do {
-                let creds = try await ClaudeOAuth.exchange(pastedCode: pastedCode, pkce: pkce)
-                try TokenStore.save(creds)
+            switch await WebUsageReader.shared.fetchOfficial() {
+            case .windows(let windows):
                 signedIn = true
-                pastedCode = ""
-                self.pkce = nil
-                await verifyAndReport(creds: creds)
+                let summary = windows
+                    .map { "\($0.label) \(Format.percent($0.percent))" }
+                    .joined(separator: ", ")
+                authStatus = "Connected — \(summary)."
+                authStatusIsError = false
                 await store.refresh()
-            } catch {
-                authStatus = error.localizedDescription
+            case .needsLogin:
+                signedIn = false
+                authStatus = "Not signed in yet — click Sign in to Claude."
+                authStatusIsError = true
+            case .unavailable(let message):
+                authStatus = message
                 authStatusIsError = true
             }
         }
     }
 
-    private func testConnection() {
-        guard let creds = TokenStore.loadCredentials() else {
-            signedIn = false
-            return
-        }
-        isWorking = true
-        authStatus = "Testing…"
-        authStatusIsError = false
-        Task {
-            defer { isWorking = false }
-            await verifyAndReport(creds: creds)
-        }
-    }
-
-    private func verifyAndReport(creds: ClaudeOAuth.Credentials) async {
-        do {
-            var creds = creds
-            if creds.needsRefresh, let refreshToken = creds.refreshToken {
-                creds = try await ClaudeOAuth.refresh(refreshToken: refreshToken)
-                try? TokenStore.save(creds)
-            }
-            let usage = try await OfficialAPI.fetch(token: creds.accessToken)
-            let summary = usage.windows
-                .map { "\($0.label) \(Format.percent($0.utilization))" }
-                .joined(separator: ", ")
-            authStatus = "Connected — \(summary)."
-            authStatusIsError = false
-        } catch {
-            authStatus = error.localizedDescription
-            authStatusIsError = true
-        }
+    private func refreshSignInState() {
+        Task { signedIn = await WebUsageReader.shared.hasSession() }
     }
 
     private func signOut() {
-        TokenStore.clear()
-        signedIn = false
-        pkce = nil
-        pastedCode = ""
-        authStatus = "Signed out — using local estimates."
-        authStatusIsError = false
-        Task { await store.refresh() }
+        isWorking = true
+        Task {
+            defer { isWorking = false }
+            await WebUsageReader.shared.signOut()
+            signedIn = false
+            authStatus = "Signed out — using local estimates."
+            authStatusIsError = false
+            await store.refresh()
+        }
     }
 
     private func setLaunchAtLogin(_ enabled: Bool) {
