@@ -52,7 +52,7 @@ struct PreferencesView: View {
                             .foregroundStyle(authStatusIsError ? .red : .green)
                             .textSelection(.enabled)
                     }
-                    Text("Sign in to claude.ai in a window inside this app. The app then reads your live 5-hour and weekly limits straight off Settings → Usage — the exact numbers you see there, per-model included. The session stays in the app's own storage; nothing is copied elsewhere. Click Check now after signing in.")
+                    Text("Sign in to claude.ai in a window inside this app, then click Check now. Use **Continue with email** — claude.ai emails a 6-digit code you enter right in the window. Google sign-in won't work here (Google blocks embedded windows). The app then reads your live 5-hour, weekly, and per-model limits straight off Settings → Usage; the session stays in the app's own storage.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
