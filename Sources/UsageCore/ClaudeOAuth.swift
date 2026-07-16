@@ -6,11 +6,11 @@ import CryptoKit
 /// approves in their browser and pastes back the displayed code; refresh
 /// tokens keep the session alive afterwards. No Keychain involved.
 public enum ClaudeOAuth {
-    // Constants verified against the installed Claude Code binary (v2.1.211):
-    // the flow moved from claude.ai/console.anthropic.com to
-    // claude.com/platform.claude.com, and `code=true` is gone.
+    // Constants verified against the installed Claude Code binary (v2.1.211)
+    // plus a captured working consent-page request: authorize on claude.ai
+    // with `code=true` (manual-code mode), exchange on platform.claude.com.
     public static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    public static let authorizeEndpoint = URL(string: "https://claude.com/cai/oauth/authorize")!
+    public static let authorizeEndpoint = URL(string: "https://claude.ai/oauth/authorize")!
     public static let tokenEndpoint = URL(string: "https://platform.claude.com/v1/oauth/token")!
     public static let redirectURI = "https://platform.claude.com/oauth/code/callback"
     public static let scopes = "user:inference user:profile user:sessions:claude_code user:mcp_servers"
@@ -87,6 +87,7 @@ public enum ClaudeOAuth {
     public static func authorizeURL(pkce: PKCE) -> URL {
         var components = URLComponents(url: authorizeEndpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [
+            URLQueryItem(name: "code", value: "true"),
             URLQueryItem(name: "client_id", value: clientID),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
