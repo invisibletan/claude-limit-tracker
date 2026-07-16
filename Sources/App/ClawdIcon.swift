@@ -17,9 +17,9 @@ enum ClawdIcon {
         }
     }
 
-    // Grid the critter is laid out on (wider than tall).
+    // Grid the critter is laid out on — wide and chunky, short legs.
     private static let gridW = 16.0
-    private static let gridH = 15.0
+    private static let gridH = 12.0
 
     /// Just the critter, animated by walk `phase` (0–1). Image is wider than tall.
     static func sprite(phase: Double, height: CGFloat) -> NSImage {
@@ -100,22 +100,22 @@ enum ClawdIcon {
         // Flat coral throughout, matching the reference's uniform pixel art.
         coral.setFill()
 
-        // Legs (four stubby), groups alternate to read as a walk.
-        let liftA = max(0, s) * 1.2
-        let liftB = max(0, -s) * 1.2
-        fill(3.6, 0.4 + liftA, 1.7, 4.4 - liftA)    // group A
-        fill(8.7, 0.4 + liftA, 1.7, 4.4 - liftA)
-        fill(6.1, 0.4 + liftB, 1.7, 4.4 - liftB)    // group B
-        fill(11.2, 0.4 + liftB, 1.7, 4.4 - liftB)
+        // Legs — short stubs (groups alternate to read as a walk).
+        let liftA = max(0, s) * 0.9
+        let liftB = max(0, -s) * 0.9
+        fill(2.8, 0.2 + liftA, 1.7, 2.4 - liftA)    // group A
+        fill(8.6, 0.2 + liftA, 1.7, 2.4 - liftA)
+        fill(5.7, 0.2 + liftB, 1.7, 2.4 - liftB)    // group B
+        fill(11.5, 0.2 + liftB, 1.7, 2.4 - liftB)
 
-        // Body: central column + side nubs.
-        fill(3.0, 4.4, 10.0, 9.6)      // torso + head column
-        fill(0.5, 8.0, 2.5, 3.2)       // left nub
-        fill(13.0, 8.0, 2.5, 3.2)      // right nub
+        // Body: one fat rectangle + side nubs.
+        fill(2.0, 2.4, 12.0, 9.6)      // torso + head
+        fill(0.0, 5.0, 2.0, 3.0)       // left nub
+        fill(14.0, 5.0, 2.0, 3.0)      // right nub
 
         // Eyes.
         eye.setFill()
-        fill(4.5, 10.2, 1.9, 2.2)
-        fill(9.6, 10.2, 1.9, 2.2)
+        fill(4.6, 8.4, 1.9, 2.2)
+        fill(9.5, 8.4, 1.9, 2.2)
     }
 }
