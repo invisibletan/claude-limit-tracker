@@ -21,17 +21,29 @@ import Testing
     @Test func authorizeURLCarriesAllParameters() throws {
         let pkce = ClaudeOAuth.PKCE(verifier: "v", challenge: "c123", state: "s456")
         let url = ClaudeOAuth.authorizeURL(pkce: pkce)
-        #expect(url.host() == "claude.ai")
+        #expect(url.host() == "claude.com")
+        #expect(url.path() == "/cai/oauth/authorize")
         let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-        #expect(query["code"] == "true")
+        #expect(query["code"] == nil)
         #expect(query["client_id"] == ClaudeOAuth.clientID)
         #expect(query["response_type"] == "code")
-        #expect(query["redirect_uri"] == ClaudeOAuth.redirectURI)
-        #expect(query["scope"] == "org:create_api_key user:profile user:inference")
+        #expect(query["redirect_uri"] == "https://platform.claude.com/oauth/code/callback")
+        #expect(query["scope"] == "user:inference user:profile user:sessions:claude_code user:mcp_servers")
         #expect(query["code_challenge"] == "c123")
         #expect(query["code_challenge_method"] == "S256")
         #expect(query["state"] == "s456")
+    }
+
+    @Test func formEncoding() {
+        let encoded = ClaudeOAuth.formEncode([
+            "grant_type": "authorization_code",
+            "scope": "user:profile user:inference",
+            "redirect_uri": "https://platform.claude.com/oauth/code/callback",
+        ])
+        #expect(encoded == "grant_type=authorization_code"
+            + "&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback"
+            + "&scope=user%3Aprofile%20user%3Ainference")
     }
 }
 

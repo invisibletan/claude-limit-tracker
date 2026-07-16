@@ -6,11 +6,14 @@ import CryptoKit
 /// approves in their browser and pastes back the displayed code; refresh
 /// tokens keep the session alive afterwards. No Keychain involved.
 public enum ClaudeOAuth {
+    // Constants verified against the installed Claude Code binary (v2.1.211):
+    // the flow moved from claude.ai/console.anthropic.com to
+    // claude.com/platform.claude.com, and `code=true` is gone.
     public static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-    public static let authorizeEndpoint = URL(string: "https://claude.ai/oauth/authorize")!
-    public static let tokenEndpoint = URL(string: "https://console.anthropic.com/v1/oauth/token")!
-    public static let redirectURI = "https://console.anthropic.com/oauth/code/callback"
-    public static let scopes = "org:create_api_key user:profile user:inference"
+    public static let authorizeEndpoint = URL(string: "https://claude.com/cai/oauth/authorize")!
+    public static let tokenEndpoint = URL(string: "https://platform.claude.com/v1/oauth/token")!
+    public static let redirectURI = "https://platform.claude.com/oauth/code/callback"
+    public static let scopes = "user:inference user:profile user:sessions:claude_code user:mcp_servers"
 
     public struct Credentials: Codable, Sendable {
         public var accessToken: String
@@ -84,7 +87,6 @@ public enum ClaudeOAuth {
     public static func authorizeURL(pkce: PKCE) -> URL {
         var components = URLComponents(url: authorizeEndpoint, resolvingAgainstBaseURL: false)!
         components.queryItems = [
-            URLQueryItem(name: "code", value: "true"),
             URLQueryItem(name: "client_id", value: clientID),
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "redirect_uri", value: redirectURI),
@@ -127,7 +129,7 @@ public enum ClaudeOAuth {
         session: URLSession = .shared
     ) async throws -> Credentials {
         let (code, pastedState) = splitPastedCode(pastedCode)
-        let body: [String: Any] = [
+        let body = [
             "grant_type": "authorization_code",
             "code": code,
             "state": pastedState ?? pkce.state,
@@ -142,7 +144,7 @@ public enum ClaudeOAuth {
         refreshToken: String,
         session: URLSession = .shared
     ) async throws -> Credentials {
-        let body: [String: Any] = [
+        let body = [
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
             "client_id": clientID,
@@ -150,13 +152,26 @@ public enum ClaudeOAuth {
         return try await postToken(body: body, session: session)
     }
 
-    private static func postToken(body: [String: Any], session: URLSession) async throws -> Credentials {
+    /// Percent-encoded application/x-www-form-urlencoded body, sorted for determinism.
+    public static func formEncode(_ fields: [String: String]) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return fields.sorted { $0.key < $1.key }.map { key, value in
+            let k = key.addingPercentEncoding(withAllowedCharacters: allowed) ?? key
+            let v = value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+            return "\(k)=\(v)"
+        }.joined(separator: "&")
+    }
+
+    private static func postToken(body: [String: String], session: URLSession) async throws -> Credentials {
         var request = URLRequest(url: tokenEndpoint)
         request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Must be form-encoded — the endpoint stalls on JSON bodies. It can
+        // also be legitimately slow (40–60 s under load), hence the timeout.
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.timeoutInterval = 20
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 120
+        request.httpBody = Data(formEncode(body).utf8)
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode != 200 {
             throw ClaudeOAuthError.httpStatus(http.statusCode, serverMessage(from: data))
