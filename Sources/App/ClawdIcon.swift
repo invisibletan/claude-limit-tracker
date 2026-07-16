@@ -100,16 +100,18 @@ enum ClawdIcon {
         // Flat coral throughout, matching the reference's uniform pixel art.
         coral.setFill()
 
-        // Legs — short stubs (groups alternate to read as a walk).
-        let liftA = max(0, s) * 0.9
-        let liftB = max(0, -s) * 0.9
-        fill(2.8, 0.2 + liftA, 1.7, 2.4 - liftA)    // group A
-        fill(8.6, 0.2 + liftA, 1.7, 2.4 - liftA)
-        fill(5.7, 0.2 + liftB, 1.7, 2.4 - liftB)    // group B
-        fill(11.5, 0.2 + liftB, 1.7, 2.4 - liftB)
+        // Legs — four EQUAL stubs cut from the body bottom: equal width (1.8)
+        // and equal gaps (1.6), with the outer two FLUSH to the body edges
+        // (x2 and x14) so the body's side edges run straight down into them.
+        let liftA = max(0, s) * 0.7
+        let liftB = max(0, -s) * 0.7
+        fill(2.0, 0.2 + liftA, 1.8, 2.3 - liftA)    // flush left  (group A)
+        fill(8.8, 0.2 + liftA, 1.8, 2.3 - liftA)    // group A
+        fill(5.4, 0.2 + liftB, 1.8, 2.3 - liftB)    // group B
+        fill(12.2, 0.2 + liftB, 1.8, 2.3 - liftB)   // flush right (group B)
 
-        // Body: one fat rectangle + side nubs.
-        fill(2.0, 2.4, 12.0, 9.6)      // torso + head
+        // Body: one fat rectangle (x2–14) + side nubs.
+        fill(2.0, 2.3, 12.0, 9.7)      // torso + head
         fill(0.0, 5.0, 2.0, 3.0)       // left nub
         fill(14.0, 5.0, 2.0, 3.0)      // right nub
 
