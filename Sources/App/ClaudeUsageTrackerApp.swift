@@ -19,12 +19,20 @@ struct ClaudeUsageTrackerApp: App {
     }
 
     private var menuBarLabel: some View {
-        // The spinning spark (color + speed set by the store) plus the live 5-hour %.
-        HStack(spacing: 3) {
-            Image(nsImage: store.iconImage ?? ClawdIcon.image(percent: nil, state: .good, phase: 0))
+        // Clawd on the left, then the usage ring, then the live 5-hour %.
+        HStack(spacing: 4) {
+            Image(nsImage: store.iconImage ?? ClawdIcon.sprite(phase: 0, height: 20))
+            Image(nsImage: ClawdIcon.ring(percent: store.snapshot?.fiveHour.percent, state: ringState, size: 16))
             Text(Format.percent(store.snapshot?.fiveHour.percent))
                 .font(.system(size: 12, weight: .semibold))
                 .monospacedDigit()
         }
+    }
+
+    private var ringState: HealthState {
+        let states = [store.snapshot?.fiveHour.state, store.snapshot?.weekly.state].compactMap { $0 }
+        if states.contains(.crit) { return .crit }
+        if states.contains(.warn) { return .warn }
+        return .good
     }
 }
