@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 import UsageCore
 
 /// Defaults keys shared between the store and Preferences.
@@ -17,8 +18,12 @@ final class UsageStore: ObservableObject {
     /// Non-fatal: the token check failed but the estimate fallback still rendered.
     @Published var officialWarning: String?
     @Published var isRefreshing = false
+    /// Current frame of the spinning menu bar mascot.
+    @Published var iconImage: NSImage?
 
     private var pollTask: Task<Void, Never>?
+    private var animationTask: Task<Void, Never>?
+    private var spinAngle = 0.0
 
     init() {
         registerDefaults()
@@ -29,10 +34,34 @@ final class UsageStore: ObservableObject {
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
+        animationTask = Task { [weak self] in
+            let frame = 1.0 / 15.0
+            while !Task.isCancelled {
+                self?.advanceSpin(dt: frame)
+                try? await Task.sleep(for: .seconds(frame))
+            }
+        }
     }
 
     deinit {
         pollTask?.cancel()
+        animationTask?.cancel()
+    }
+
+    /// Advances and re-renders the mascot: spin speed rises with activity,
+    /// color reflects the worse of the two limits.
+    private func advanceSpin(dt: Double) {
+        let activity = snapshot?.activityLevel ?? 0
+        let revPerSecond = 0.15 + activity * 1.35
+        spinAngle = (spinAngle + revPerSecond * 360 * dt).truncatingRemainder(dividingBy: 360)
+        iconImage = SparkIcon.image(angleDegrees: spinAngle, color: SparkIcon.color(for: spinState))
+    }
+
+    private var spinState: HealthState {
+        let states = [snapshot?.fiveHour.state, snapshot?.weekly.state].compactMap { $0 }
+        if states.contains(.crit) { return .crit }
+        if states.contains(.warn) { return .warn }
+        return .good
     }
 
     private func registerDefaults() {

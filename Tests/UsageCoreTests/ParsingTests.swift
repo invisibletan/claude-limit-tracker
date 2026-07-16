@@ -189,6 +189,29 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         #expect(snapshot.burnRateText == nil)
     }
 
+    @Test func activityLevelFromBurnRate() throws {
+        let block = try #require(try CCUsage.parseActiveBlock(blocksJSON))  // ~120k tok/min
+        let snapshot = SnapshotBuilder.build(official: nil, block: block, weeklyCostUSD: 100, caps: caps)
+        #expect(abs(snapshot.activityLevel - 120_262.14 / 200_000) < 0.001)
+    }
+
+    @Test func activityLevelFallsBackToFiveHourPercent() {
+        // No block → activity tracks how full the 5-hour window is (40% → 0.40).
+        let official = OfficialUsage(windows: [
+            .init(key: "five_hour", label: "5-hour limit", utilization: 40, resetsAt: nil),
+        ])
+        let snapshot = SnapshotBuilder.build(official: official, block: nil, weeklyCostUSD: nil, caps: caps)
+        #expect(abs(snapshot.activityLevel - 0.40) < 0.0001)
+    }
+
+    @Test func activityLevelClampsToOne() {
+        let official = OfficialUsage(windows: [
+            .init(key: "five_hour", label: "5-hour limit", utilization: 95, resetsAt: nil),
+        ])
+        let block = CCUsage.ActiveBlock(costUSD: 1, totalTokens: 1, tokensPerMinute: 900_000)
+        let snapshot = SnapshotBuilder.build(official: official, block: block, weeklyCostUSD: nil, caps: caps)
+        #expect(snapshot.activityLevel == 1)
+    }
 }
 
 @Suite struct FormattingTests {

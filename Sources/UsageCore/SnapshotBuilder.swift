@@ -33,11 +33,20 @@ public enum SnapshotBuilder {
             burnRateText = Format.tokensPerMinute(tpm)
         }
 
+        // Spin signal: prefer live burn rate, else how full the 5-hour window is.
+        let activity: Double
+        if let tpm = block?.tokensPerMinute {
+            activity = min(1, tpm / 200_000)
+        } else {
+            activity = min(1, max(0, (fiveHour.percent ?? 0) / 100))
+        }
+
         return UsageSnapshot(
             fiveHour: fiveHour,
             weekly: weekly,
             extraMeters: extras,
             burnRateText: burnRateText,
+            activityLevel: activity,
             source: official != nil ? .officialAPI : .localEstimate,
             updatedAt: now
         )

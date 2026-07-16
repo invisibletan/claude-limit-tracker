@@ -58,6 +58,8 @@ public struct UsageSnapshot: Sendable {
     /// Additional official windows (per-model weekly limits); empty in estimate mode.
     public var extraMeters: [ExtraMeter]
     public var burnRateText: String?
+    /// 0–1 signal driving the menu bar mascot's spin speed (higher = busier).
+    public var activityLevel: Double
     public var source: UsageSource
     public var updatedAt: Date
 
@@ -66,6 +68,7 @@ public struct UsageSnapshot: Sendable {
         weekly: Meter,
         extraMeters: [ExtraMeter] = [],
         burnRateText: String?,
+        activityLevel: Double = 0,
         source: UsageSource,
         updatedAt: Date
     ) {
@@ -73,6 +76,7 @@ public struct UsageSnapshot: Sendable {
         self.weekly = weekly
         self.extraMeters = extraMeters
         self.burnRateText = burnRateText
+        self.activityLevel = activityLevel
         self.source = source
         self.updatedAt = updatedAt
     }
