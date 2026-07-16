@@ -98,7 +98,10 @@ struct PreferencesView: View {
         Task {
             do {
                 let usage = try await OfficialAPI.fetch(token: token)
-                tokenStatus = "Connected — 5h at \(Format.percent(usage.fiveHourUtilization))."
+                let summary = usage.windows
+                    .map { "\($0.label) \(Format.percent($0.utilization))" }
+                    .joined(separator: ", ")
+                tokenStatus = "Connected — \(summary)."
                 tokenStatusIsError = false
                 await store.refresh()
             } catch {

@@ -16,6 +16,18 @@ public enum SnapshotBuilder {
         let fiveHour = fiveHourMeter(official: official, block: block, caps: caps, now: now)
         let weekly = weeklyMeter(official: official, weeklyCostUSD: weeklyCostUSD, caps: caps, now: now)
 
+        // Per-model weekly windows the official endpoint reports beyond the headline two.
+        let extras = (official?.extraWindows ?? []).map { window in
+            ExtraMeter(
+                title: window.label,
+                meter: Meter(
+                    percent: min(100, max(0, window.utilization)),
+                    detail: "",
+                    resetText: Format.reset(window.resetsAt, now: now)
+                )
+            )
+        }
+
         var burnRateText: String?
         if let tpm = block?.tokensPerMinute {
             burnRateText = Format.tokensPerMinute(tpm)
@@ -24,6 +36,7 @@ public enum SnapshotBuilder {
         return UsageSnapshot(
             fiveHour: fiveHour,
             weekly: weekly,
+            extraMeters: extras,
             burnRateText: burnRateText,
             source: official != nil ? .officialAPI : .localEstimate,
             updatedAt: now

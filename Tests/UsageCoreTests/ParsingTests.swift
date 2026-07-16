@@ -94,6 +94,35 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         #expect(usage.sevenDayResetsAt != nil)
     }
 
+    @Test func modelSpecificAndUnknownWindows() throws {
+        let payload = """
+        {
+          "five_hour": { "utilization": 18 },
+          "seven_day": { "utilization": 5 },
+          "seven_day_opus": { "utilization": 9, "resets_at": "2026-07-18T13:00:00Z" },
+          "some_new_window": { "utilization": 42 },
+          "not_a_window": { "foo": 1 },
+          "scalar": 7
+        }
+        """.data(using: .utf8)!
+        let usage = try OfficialAPI.parse(payload)
+        #expect(usage.windows.count == 4)
+        // Known keys first, in order; extras after.
+        #expect(usage.windows[0].key == "five_hour")
+        #expect(usage.windows[1].key == "seven_day")
+        #expect(usage.fiveHour?.utilization == 18)
+        #expect(usage.sevenDay?.utilization == 5)
+
+        let extras = usage.extraWindows
+        #expect(extras.count == 2)
+        let opus = try #require(extras.first { $0.key == "seven_day_opus" })
+        #expect(opus.label == "Weekly · Opus")
+        #expect(opus.utilization == 9)
+        #expect(opus.resetsAt != nil)
+        let unknown = try #require(extras.first { $0.key == "some_new_window" })
+        #expect(unknown.label == "Some New Window")
+    }
+
     @Test func normalizesFractionalUtilization() throws {
         let payload = #"{"five_hour": {"utilization": 0.68}}"#.data(using: .utf8)!
         let usage = try OfficialAPI.parse(payload)
@@ -132,12 +161,14 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
 
     @Test func officialModeWinsPercentages() throws {
         let block = try #require(try CCUsage.parseActiveBlock(blocksJSON))
-        let official = OfficialUsage(
-            fiveHourUtilization: 68,
-            fiveHourResetsAt: Date(timeIntervalSinceNow: 49 * 60),
-            sevenDayUtilization: 31,
-            sevenDayResetsAt: Date(timeIntervalSinceNow: 3 * 86400)
-        )
+        let official = OfficialUsage(windows: [
+            .init(key: "five_hour", label: "5-hour limit", utilization: 68,
+                  resetsAt: Date(timeIntervalSinceNow: 49 * 60)),
+            .init(key: "seven_day", label: "Weekly limit", utilization: 31,
+                  resetsAt: Date(timeIntervalSinceNow: 3 * 86400)),
+            .init(key: "seven_day_opus", label: "Weekly · Opus", utilization: 9,
+                  resetsAt: Date(timeIntervalSinceNow: 2 * 86400)),
+        ])
         let snapshot = SnapshotBuilder.build(official: official, block: block, weeklyCostUSD: 444.55, caps: caps)
         #expect(snapshot.source == .officialAPI)
         #expect(snapshot.fiveHour.percent == 68)
@@ -145,6 +176,10 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         // Cost detail still comes from ccusage.
         #expect(snapshot.fiveHour.detail.contains("$23.54 used"))
         #expect(snapshot.fiveHour.resetText.contains("resets in"))
+        // Model-specific window surfaces as an extra meter.
+        #expect(snapshot.extraMeters.count == 1)
+        #expect(snapshot.extraMeters[0].title == "Weekly · Opus")
+        #expect(snapshot.extraMeters[0].meter.percent == 9)
     }
 
     @Test func idleNoData() {

@@ -13,6 +13,9 @@ struct PanelView: View {
             if let snapshot = store.snapshot {
                 MeterView(title: "5-hour limit", meter: snapshot.fiveHour)
                 MeterView(title: "Weekly limit", meter: snapshot.weekly)
+                ForEach(snapshot.extraMeters, id: \.title) { extra in
+                    MeterView(title: extra.title, meter: extra.meter)
+                }
 
                 if let burn = snapshot.burnRateText {
                     Divider()
@@ -70,12 +73,27 @@ struct PanelView: View {
         }
     }
 
+    @ViewBuilder
     private func sourceFootnote(_ snapshot: UsageSnapshot) -> some View {
         Text(snapshot.source == .officialAPI
              ? "Official Anthropic usage data"
              : "Estimated from local logs vs. your caps")
             .font(.caption2)
             .foregroundStyle(.tertiary)
+
+        if snapshot.source == .localEstimate {
+            HStack(spacing: 6) {
+                Text("Exact numbers: run `claude setup-token`, paste in Preferences")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                Button("Copy command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("claude setup-token", forType: .string)
+                }
+                .font(.caption2)
+                .buttonStyle(.link)
+            }
+        }
     }
 
     private var actions: some View {

@@ -40,17 +40,38 @@ public struct Meter: Sendable {
     }
 }
 
+/// A titled meter beyond the two headline limits (e.g. a per-model weekly limit).
+public struct ExtraMeter: Sendable {
+    public var title: String
+    public var meter: Meter
+
+    public init(title: String, meter: Meter) {
+        self.title = title
+        self.meter = meter
+    }
+}
+
 /// The full state rendered by the menu bar UI.
 public struct UsageSnapshot: Sendable {
     public var fiveHour: Meter
     public var weekly: Meter
+    /// Additional official windows (per-model weekly limits); empty in estimate mode.
+    public var extraMeters: [ExtraMeter]
     public var burnRateText: String?
     public var source: UsageSource
     public var updatedAt: Date
 
-    public init(fiveHour: Meter, weekly: Meter, burnRateText: String?, source: UsageSource, updatedAt: Date) {
+    public init(
+        fiveHour: Meter,
+        weekly: Meter,
+        extraMeters: [ExtraMeter] = [],
+        burnRateText: String?,
+        source: UsageSource,
+        updatedAt: Date
+    ) {
         self.fiveHour = fiveHour
         self.weekly = weekly
+        self.extraMeters = extraMeters
         self.burnRateText = burnRateText
         self.source = source
         self.updatedAt = updatedAt
