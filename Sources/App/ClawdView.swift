@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// The Claude spark mark, drawn static for the panel and Preferences headers —
-/// the same starburst the menu bar mascot animates.
+/// The Clawd critter, drawn static for the panel and Preferences headers —
+/// the same mascot the menu bar animates (there wrapped in the usage ring).
 struct ClawdView: View {
     var size: CGFloat = 20
 
     var body: some View {
-        Image(nsImage: SparkIcon.image(angleDegrees: 0, color: SparkIcon.clay, size: size))
+        Image(nsImage: ClawdIcon.image(percent: nil, state: .good, phase: 0.0, size: size, showRing: false))
             .accessibilityLabel("Clawd")
     }
 }

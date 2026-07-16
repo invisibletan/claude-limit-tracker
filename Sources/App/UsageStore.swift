@@ -23,7 +23,7 @@ final class UsageStore: ObservableObject {
 
     private var pollTask: Task<Void, Never>?
     private var animationTask: Task<Void, Never>?
-    private var spinAngle = 0.0
+    private var walkPhase = 0.0
 
     init() {
         registerDefaults()
@@ -37,7 +37,7 @@ final class UsageStore: ObservableObject {
         animationTask = Task { [weak self] in
             let frame = 1.0 / 15.0
             while !Task.isCancelled {
-                self?.advanceSpin(dt: frame)
+                self?.advanceWalk(dt: frame)
                 try? await Task.sleep(for: .seconds(frame))
             }
         }
@@ -48,13 +48,17 @@ final class UsageStore: ObservableObject {
         animationTask?.cancel()
     }
 
-    /// Advances and re-renders the mascot: spin speed rises with activity,
-    /// color reflects the worse of the two limits.
-    private func advanceSpin(dt: Double) {
+    /// Advances and re-renders Clawd: walk cadence rises with activity, and the
+    /// ring shows the 5-hour usage colored by the worse of the two limits.
+    private func advanceWalk(dt: Double) {
         let activity = snapshot?.activityLevel ?? 0
-        let revPerSecond = 0.15 + activity * 1.35
-        spinAngle = (spinAngle + revPerSecond * 360 * dt).truncatingRemainder(dividingBy: 360)
-        iconImage = SparkIcon.image(angleDegrees: spinAngle, color: SparkIcon.color(for: spinState))
+        let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
+        walkPhase = (walkPhase + cyclesPerSecond * dt).truncatingRemainder(dividingBy: 1)
+        iconImage = ClawdIcon.image(
+            percent: snapshot?.fiveHour.percent,
+            state: spinState,
+            phase: walkPhase
+        )
     }
 
     private var spinState: HealthState {
