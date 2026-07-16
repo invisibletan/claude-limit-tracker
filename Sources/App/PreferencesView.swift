@@ -46,9 +46,12 @@ struct PreferencesView: View {
                 Section("Behavior") {
                     HStack {
                         Text("Refresh every")
-                        TextField("seconds", value: $refreshInterval, format: .number)
-                            .frame(width: 70)
+                        TextField("", value: $refreshInterval, format: .number)
+                            .labelsHidden()
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 50)
                         Text("seconds")
+                        Spacer()
                     }
                     Toggle("Launch at login", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, enabled in
