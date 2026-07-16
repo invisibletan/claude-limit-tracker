@@ -7,15 +7,6 @@ enum ClawdIcon {
     static let coral = NSColor(srgbRed: 0xCC / 255, green: 0x6B / 255, blue: 0x4E / 255, alpha: 1)
     static let eye = NSColor(srgbRed: 0.09, green: 0.07, blue: 0.06, alpha: 1)
 
-    // Ring gauge: orange until it gets heavy, red once past the threshold.
-    static let ringOrange = NSColor(srgbRed: 0.91, green: 0.55, blue: 0.16, alpha: 1)
-    static let ringRed = NSColor(srgbRed: 0.82, green: 0.28, blue: 0.23, alpha: 1)
-    static let ringRedThreshold = 80.0
-
-    static func ringColor(forPercent percent: Double?) -> NSColor {
-        (percent ?? 0) >= ringRedThreshold ? ringRed : ringOrange
-    }
-
     // Grid the critter is laid out on — wide and chunky, short legs.
     private static let gridW = 16.0
     private static let gridH = 12.0
@@ -68,7 +59,7 @@ enum ClawdIcon {
                 endAngle: .pi / 2 - 2 * .pi * CGFloat(fraction),
                 clockwise: true
             )
-            ringColor(forPercent: percent).setStroke()
+            Palette.nsColor(forPercent: percent).setStroke()
             ctx.strokePath()
         }
     }

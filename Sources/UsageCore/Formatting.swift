@@ -2,24 +2,9 @@ import Foundation
 
 /// Small formatting helpers shared by the panel and tests.
 public enum Format {
-    public static func money(_ value: Double) -> String {
-        String(format: "$%.2f", value)
-    }
-
     public static func percent(_ value: Double?) -> String {
         guard let value else { return "–%" }
         return "\(Int(value.rounded()))%"
-    }
-
-    /// "76.9k tok/min" style burn rate.
-    public static func tokensPerMinute(_ value: Double) -> String {
-        if value >= 1_000_000 {
-            return String(format: "%.1fM tok/min", value / 1_000_000)
-        }
-        if value >= 1_000 {
-            return String(format: "%.1fk tok/min", value / 1_000)
-        }
-        return String(format: "%.0f tok/min", value)
     }
 
     /// "resets in 49 min", "resets in 3h 20m", or "resets Mon 00:00" for far-out dates.
@@ -46,15 +31,5 @@ public enum Format {
         let minutes = seconds / 60
         if minutes < 60 { return "updated \(minutes)m ago" }
         return "updated \(minutes / 60)h ago"
-    }
-
-    /// Parses an ISO-8601 timestamp, with or without fractional seconds.
-    public static func parseISO8601(_ string: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: string) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: string)
     }
 }

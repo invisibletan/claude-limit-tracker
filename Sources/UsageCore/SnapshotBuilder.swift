@@ -1,114 +1,21 @@
 import Foundation
 
-/// Merges the two data sources into one `UsageSnapshot`.
-///
-/// Priority: official API percentages and reset times when available (exact,
-/// matches claude.ai Settings → Usage); ccusage fills in cost detail and burn
-/// rate, and carries the whole snapshot alone when no token is configured.
+/// Maps the official usage windows onto the two headline meters.
 public enum SnapshotBuilder {
-    /// Burn rate (tokens/min) that maps to a fully-spun mascot.
-    private static let busyTokensPerMinute = 200_000.0
-
-    public static func build(
-        official: OfficialUsage?,
-        block: CCUsage.ActiveBlock?,
-        weeklyCostUSD: Double?,
-        caps: EstimateCaps,
-        now: Date = Date()
-    ) -> UsageSnapshot {
-        let fiveHour = fiveHourMeter(official: official, block: block, caps: caps, now: now)
-        let weekly = weeklyMeter(official: official, weeklyCostUSD: weeklyCostUSD, caps: caps, now: now)
-
-        // Per-model weekly windows the official endpoint reports beyond the headline two.
-        let extras = (official?.extraWindows ?? []).map { window in
-            ExtraMeter(
-                title: window.label,
-                meter: Meter(
-                    percent: min(100, max(0, window.utilization)),
-                    detail: "",
-                    resetText: Format.reset(window.resetsAt, now: now)
-                )
+    public static func build(from usage: OfficialUsage, now: Date = Date()) -> UsageSnapshot {
+        func meter(_ window: OfficialUsage.Window?) -> Meter {
+            Meter(
+                percent: window.map { min(100, max(0, $0.utilization)) },
+                resetText: Format.reset(window?.resetsAt, now: now)
             )
         }
-
-        let burnTokensPerMinute = block?.tokensPerMinute
-        let burnRateText = burnTokensPerMinute.map(Format.tokensPerMinute)
-
-        // Spin signal: prefer live burn rate, else how full the 5-hour window is.
-        let activity: Double
-        if let tpm = burnTokensPerMinute {
-            activity = min(1, tpm / busyTokensPerMinute)
-        } else {
-            activity = min(1, max(0, (fiveHour.percent ?? 0) / 100))
-        }
-
+        let fiveHour = usage.fiveHour
         return UsageSnapshot(
-            fiveHour: fiveHour,
-            weekly: weekly,
-            extraMeters: extras,
-            burnRateText: burnRateText,
-            activityLevel: activity,
-            source: official != nil ? .officialAPI : .localEstimate,
+            fiveHour: meter(fiveHour),
+            weekly: meter(usage.sevenDay),
+            // Mascot spin tracks how full the 5-hour window is.
+            activityLevel: min(1, max(0, (fiveHour?.utilization ?? 0) / 100)),
             updatedAt: now
         )
-    }
-
-    static func fiveHourMeter(
-        official: OfficialUsage?,
-        block: CCUsage.ActiveBlock?,
-        caps: EstimateCaps,
-        now: Date
-    ) -> Meter {
-        var detailParts: [String] = []
-        if let block {
-            detailParts.append("\(Format.money(block.costUSD)) used")
-            if let projected = block.projectedCostUSD {
-                detailParts.append("projected \(Format.money(projected))")
-            }
-        }
-
-        if let utilization = official?.fiveHourUtilization {
-            return Meter(
-                percent: min(100, max(0, utilization)),
-                detail: detailParts.isEmpty ? "official usage" : detailParts.joined(separator: " · "),
-                resetText: Format.reset(official?.fiveHourResetsAt, now: now)
-            )
-        }
-
-        guard let block else {
-            return Meter(percent: 0, detail: "no active session", resetText: "")
-        }
-        let percent = caps.fiveHourUSD > 0 ? min(100, block.costUSD / caps.fiveHourUSD * 100) : nil
-        return Meter(
-            percent: percent,
-            detail: detailParts.joined(separator: " · "),
-            resetText: Format.reset(block.endTime, now: now)
-        )
-    }
-
-    static func weeklyMeter(
-        official: OfficialUsage?,
-        weeklyCostUSD: Double?,
-        caps: EstimateCaps,
-        now: Date
-    ) -> Meter {
-        var detail = ""
-        if let weeklyCostUSD {
-            detail = "\(Format.money(weeklyCostUSD)) used"
-        }
-
-        if let utilization = official?.sevenDayUtilization {
-            return Meter(
-                percent: min(100, max(0, utilization)),
-                detail: detail.isEmpty ? "official usage" : detail,
-                resetText: Format.reset(official?.sevenDayResetsAt, now: now)
-            )
-        }
-
-        guard let weeklyCostUSD else {
-            return Meter(percent: nil, detail: "no data", resetText: "")
-        }
-        let percent = caps.weeklyUSD > 0 ? min(100, weeklyCostUSD / caps.weeklyUSD * 100) : nil
-        return Meter(percent: percent, detail: detail, resetText: "rolling 7 days")
     }
 }

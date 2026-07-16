@@ -5,13 +5,7 @@ import UsageCore
 
 /// Defaults keys (and their default values) shared between the store and Preferences.
 enum PrefKey {
-    static let cap5h = "capFiveHourUSD"
-    static let capWeekly = "capWeeklyUSD"
     static let refreshInterval = "refreshIntervalSeconds"
-    static let ccusagePath = "ccusagePathOverride"
-
-    static let defaultCap5h = 35.0
-    static let defaultCapWeekly = 9000.0
     static let defaultRefreshInterval = 60.0
 }
 
@@ -19,10 +13,10 @@ enum PrefKey {
 final class UsageStore: ObservableObject {
     @Published var snapshot: UsageSnapshot?
     @Published var lastError: String?
-    /// Non-fatal: the token check failed but the estimate fallback still rendered.
-    @Published var officialWarning: String?
+    /// True when no token is configured yet.
+    @Published var needsToken = TokenStore.load() == nil
     @Published var isRefreshing = false
-    /// Current frame of the spinning menu bar mascot.
+    /// Current frame of the walking menu bar mascot.
     @Published var iconImage: NSImage?
 
     private var pollTask: Task<Void, Never>?
@@ -30,7 +24,7 @@ final class UsageStore: ObservableObject {
     private var walkPhase = 0.0
 
     init() {
-        registerDefaults()
+        UserDefaults.standard.register(defaults: [PrefKey.refreshInterval: PrefKey.defaultRefreshInterval])
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
@@ -52,8 +46,8 @@ final class UsageStore: ObservableObject {
         animationTask?.cancel()
     }
 
-    /// Advances and re-renders Clawd: walk cadence rises with activity, and the
-    /// ring shows the 5-hour usage (orange, red past the threshold).
+    /// Advances and re-renders Clawd: walk cadence rises with usage, and the ring
+    /// shows the 5-hour usage (orange, red past the threshold).
     private func advanceWalk(dt: Double) {
         let activity = snapshot?.activityLevel ?? 0
         let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
@@ -65,80 +59,25 @@ final class UsageStore: ObservableObject {
         )
     }
 
-    private func registerDefaults() {
-        // Caps calibrated to a Max 20× plan so the estimate tracks the real
-        // Settings → Usage page: weekly ~$9,000 maps ~$458 spent to ~5%,
-        // 5-hour ~$35 maps a hot session to ~20%. Tunable in Preferences.
-        UserDefaults.standard.register(defaults: [
-            PrefKey.cap5h: PrefKey.defaultCap5h,
-            PrefKey.capWeekly: PrefKey.defaultCapWeekly,
-            // Each official read spends ~1 token; 60s keeps that negligible.
-            PrefKey.refreshInterval: PrefKey.defaultRefreshInterval,
-        ])
-    }
-
-    var caps: EstimateCaps {
-        EstimateCaps(
-            fiveHourUSD: UserDefaults.standard.double(forKey: PrefKey.cap5h),
-            weeklyUSD: UserDefaults.standard.double(forKey: PrefKey.capWeekly)
-        )
-    }
-
     func refresh() async {
         if isRefreshing { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // 1. Exact 5h/weekly from the rate-limit headers, if a token is stored.
-        var official: OfficialUsage?
-        var officialErr: String?
-        if let token = TokenStore.load() {
-            do {
-                official = try await RateLimitUsage.fetchUsage(token: token)
-            } catch {
-                officialErr = error.localizedDescription
-            }
-        }
-
-        // 2. Local estimate from ccusage — cost detail, burn rate, and the
-        // meters/percentages used when no token is configured.
-        let runner = CCUsageRunner(overridePath: UserDefaults.standard.string(forKey: PrefKey.ccusagePath))
-        // Both spawn a ccusage subprocess — run them concurrently to halve latency.
-        async let blockResult = runner.fetchActiveBlock()
-        async let weeklyResult = runner.fetchWeeklyCost()
-
-        var block: CCUsage.ActiveBlock?
-        var weeklyCost: Double?
-        var estimateErr: String?
-        var blockSucceeded = false
-        do {
-            block = try await blockResult
-            blockSucceeded = true
-        } catch {
-            estimateErr = error.localizedDescription
-        }
-        do {
-            weeklyCost = try await weeklyResult
-        } catch {
-            estimateErr = estimateErr ?? error.localizedDescription
-        }
-
-        officialWarning = officialErr
-
-        let estimateAvailable = blockSucceeded || weeklyCost != nil
-        if official == nil && !estimateAvailable {
-            // Keep the stale snapshot visible, surface the error.
-            lastError = officialErr ?? estimateErr ?? "No usage data available."
+        guard let token = TokenStore.load() else {
+            needsToken = true
+            snapshot = nil
+            lastError = nil
             return
         }
-
-        // Partial estimate failure renders as a footnote under the meters.
-        lastError = estimateErr
-        snapshot = SnapshotBuilder.build(
-            official: official,
-            block: block,
-            weeklyCostUSD: weeklyCost,
-            caps: caps
-        )
+        needsToken = false
+        do {
+            let usage = try await RateLimitUsage.fetchUsage(token: token)
+            snapshot = SnapshotBuilder.build(from: usage)
+            lastError = nil
+        } catch {
+            // Keep the last snapshot visible; surface the error under it.
+            lastError = error.localizedDescription
+        }
     }
 }

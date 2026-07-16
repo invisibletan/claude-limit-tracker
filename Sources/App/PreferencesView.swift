@@ -5,10 +5,7 @@ import UsageCore
 struct PreferencesView: View {
     @ObservedObject var store: UsageStore
 
-    @AppStorage(PrefKey.cap5h) private var cap5h = PrefKey.defaultCap5h
-    @AppStorage(PrefKey.capWeekly) private var capWeekly = PrefKey.defaultCapWeekly
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval = PrefKey.defaultRefreshInterval
-    @AppStorage(PrefKey.ccusagePath) private var ccusagePath = ""
 
     @State private var tokenInput = TokenStore.load() ?? ""
     @State private var tokenStatus: String?
@@ -28,7 +25,7 @@ struct PreferencesView: View {
             .padding(.top, 16)
 
             Form {
-                Section("Official usage (recommended)") {
+                Section("Connect") {
                     SecureField("Token", text: $tokenInput, prompt: Text("paste from `claude setup-token`"))
                     HStack {
                         Button("Save & test") { saveAndTest() }
@@ -41,25 +38,7 @@ struct PreferencesView: View {
                                 .textSelection(.enabled)
                         }
                     }
-                    Text("Run `claude setup-token` in a terminal and paste the result here. The app then reads your exact 5-hour and weekly limits from Anthropic's rate-limit headers — the same numbers as claude.ai Settings → Usage. Each refresh makes one tiny (1-token) API call to read them. Stored in a chmod-600 file, never the Keychain.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Estimate caps (used without a token)") {
-                    HStack {
-                        Text("5-hour cap")
-                        TextField("USD", value: $cap5h, format: .number)
-                            .frame(width: 90)
-                        Text("USD")
-                    }
-                    HStack {
-                        Text("Weekly cap")
-                        TextField("USD", value: $capWeekly, format: .number)
-                            .frame(width: 90)
-                        Text("USD")
-                    }
-                    Text("The tracker reads your local usage with ccusage and shows it as a share of these caps. The percentages are an estimate — Anthropic doesn't expose the exact figures to third-party apps. Tune each cap so the reading roughly matches claude.ai Settings → Usage. For the exact numbers, use “Open claude.ai usage page” in the menu.")
+                    Text("Run `claude setup-token` in a terminal and paste the result here. The app reads your exact 5-hour and weekly limits from Anthropic's rate-limit headers — the same numbers as claude.ai Settings → Usage. Each refresh makes one tiny (1-token) API call. Stored in a chmod-600 file, never the Keychain.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -71,7 +50,6 @@ struct PreferencesView: View {
                             .frame(width: 70)
                         Text("seconds")
                     }
-                    TextField("ccusage path (blank = auto-detect)", text: $ccusagePath)
                     Toggle("Launch at login", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, enabled in
                             setLaunchAtLogin(enabled)
@@ -83,7 +61,7 @@ struct PreferencesView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 480)
+        .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -96,7 +74,7 @@ struct PreferencesView: View {
             return
         }
         guard let token = TokenStore.load() else {
-            tokenStatus = "Token cleared — using local estimates."
+            tokenStatus = "Token cleared."
             tokenStatusIsError = false
             return
         }
@@ -123,7 +101,7 @@ struct PreferencesView: View {
     private func clearToken() {
         tokenInput = ""
         TokenStore.clear()
-        tokenStatus = "Token cleared — using local estimates."
+        tokenStatus = "Token cleared."
         tokenStatusIsError = false
         Task { await store.refresh() }
     }

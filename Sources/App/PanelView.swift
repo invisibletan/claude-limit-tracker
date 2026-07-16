@@ -1,7 +1,7 @@
 import SwiftUI
 import UsageCore
 
-/// The dropdown panel: two limit meters, burn rate, actions.
+/// The dropdown panel: two limit meters and actions.
 struct PanelView: View {
     @ObservedObject var store: UsageStore
     @Environment(\.openSettings) private var openSettings
@@ -13,43 +13,20 @@ struct PanelView: View {
             if let snapshot = store.snapshot {
                 MeterView(title: "5-hour limit", meter: snapshot.fiveHour)
                 MeterView(title: "Weekly limit", meter: snapshot.weekly)
-                ForEach(snapshot.extraMeters, id: \.title) { extra in
-                    MeterView(title: extra.title, meter: extra.meter)
+                if let error = store.lastError {
+                    Text(error).font(.caption2).foregroundStyle(.orange)
                 }
-
-                if let burn = snapshot.burnRateText {
-                    Divider()
-                    HStack {
-                        Text("Burn rate")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text(burn)
-                            .monospacedDigit()
-                    }
+            } else if store.needsToken {
+                Text("Add a token in Preferences to see your usage.")
                     .font(.caption)
-                }
-
-                sourceFootnote(snapshot)
+                    .foregroundStyle(.secondary)
             } else if let error = store.lastError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                Text(error).font(.caption).foregroundStyle(.red)
             } else {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text("Reading usage…").font(.caption).foregroundStyle(.secondary)
                 }
-            }
-
-            if let warning = store.officialWarning {
-                Text(warning)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-            }
-            if store.snapshot != nil, let error = store.lastError {
-                Text(error)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
             }
 
             Divider()
@@ -71,22 +48,6 @@ struct PanelView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private func sourceFootnote(_ snapshot: UsageSnapshot) -> some View {
-        if snapshot.source == .officialAPI {
-            Text("Official Anthropic usage (live)")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        } else {
-            Text("Estimated from local logs vs. your caps")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-            Text("Exact numbers: add a token in Preferences")
-                .font(.caption2)
-                .foregroundStyle(.orange)
         }
     }
 
@@ -133,13 +94,7 @@ struct MeterView: View {
     let title: String
     let meter: Meter
 
-    private var barColor: Color {
-        switch meter.state {
-        case .good: return Color(red: 0.25, green: 0.62, blue: 0.36)
-        case .warn: return Color(red: 0.85, green: 0.58, blue: 0.13)
-        case .crit: return Color(red: 0.82, green: 0.28, blue: 0.23)
-        }
-    }
+    private var barColor: Color { Palette.color(forPercent: meter.percent) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -161,19 +116,9 @@ struct MeterView: View {
             }
             .frame(height: 7)
 
-            HStack(spacing: 4) {
-                if !meter.detail.isEmpty {
-                    Text(meter.detail)
-                }
-                if !meter.detail.isEmpty && !meter.resetText.isEmpty {
-                    Text("·")
-                }
-                if !meter.resetText.isEmpty {
-                    Text(meter.resetText).fontWeight(.medium)
-                }
+            if !meter.resetText.isEmpty {
+                Text(meter.resetText).font(.caption2).foregroundStyle(.secondary)
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
         }
     }
 }
