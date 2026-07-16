@@ -53,9 +53,18 @@ public enum CCUsage {
     }
 
     /// Sums `totalCost` across all rows of `ccusage daily --json --since <date>`.
+    /// Accepts both `{"daily": [...]}` and a bare top-level array — ccusage
+    /// emits `[]` when the requested range contains no data.
     public static func parseDailyTotalCost(_ data: Data) throws -> Double {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let daily = root["daily"] as? [[String: Any]] else {
+        let root = try? JSONSerialization.jsonObject(with: data)
+        let daily: [[String: Any]]
+        if let dict = root as? [String: Any], let rows = dict["daily"] as? [[String: Any]] {
+            daily = rows
+        } else if let rows = root as? [[String: Any]] {
+            daily = rows
+        } else if let empty = root as? [Any], empty.isEmpty {
+            daily = []
+        } else {
             throw CCUsageError.malformedOutput("daily")
         }
         return daily.reduce(0) { $0 + ((($1["totalCost"]) as? NSNumber)?.doubleValue ?? 0) }
@@ -150,18 +159,40 @@ public struct CCUsageRunner: Sendable {
         }
     }
 
+    /// `--since` date for a trailing window, always Gregorian `yyyyMMdd`.
+    /// Explicit calendar + POSIX locale: on devices set to a non-Gregorian
+    /// system calendar (e.g. Thai Buddhist, where 2026 renders as 2569),
+    /// `Calendar.current`/default formatters produce a date ccusage
+    /// interprets as far future and returns nothing for.
+    public static func sinceString(daysBack: Int, from now: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        let since = calendar.date(byAdding: .day, value: -(daysBack - 1), to: now) ?? now
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyyMMdd"
+        return formatter.string(from: since)
+    }
+
+    /// The currently active 5-hour block, or nil when idle.
+    public func fetchActiveBlock() async throws -> CCUsage.ActiveBlock? {
+        let data = try await run(["blocks", "--active", "--json"])
+        return try CCUsage.parseActiveBlock(data)
+    }
+
+    /// Total cost over the trailing 7 days.
+    public func fetchWeeklyCost(now: Date = Date()) async throws -> Double {
+        let since = Self.sinceString(daysBack: 7, from: now)
+        let data = try await run(["daily", "--json", "--since", since])
+        return try CCUsage.parseDailyTotalCost(data)
+    }
+
     /// Fetches the active block and trailing-7-day total cost in one call.
     public func fetchEstimate(now: Date = Date()) async throws -> (block: CCUsage.ActiveBlock?, weeklyCostUSD: Double) {
-        let blockData = try await run(["blocks", "--active", "--json"])
-        let block = try CCUsage.parseActiveBlock(blockData)
-
-        let calendar = Calendar.current
-        let since = calendar.date(byAdding: .day, value: -6, to: now) ?? now
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        formatter.timeZone = calendar.timeZone
-        let dailyData = try await run(["daily", "--json", "--since", formatter.string(from: since)])
-        let weeklyCost = try CCUsage.parseDailyTotalCost(dailyData)
+        let block = try await fetchActiveBlock()
+        let weeklyCost = try await fetchWeeklyCost(now: now)
         return (block, weeklyCost)
     }
 }

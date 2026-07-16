@@ -55,6 +55,28 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         let total = try CCUsage.parseDailyTotalCost(dailyJSON)
         #expect(nearlyEqual(total, 124.28, accuracy: 0.001))
     }
+
+    @Test func parseDailyToleratesBareEmptyArray() throws {
+        // ccusage emits `[]` (no wrapper object) when the range has no data.
+        let total = try CCUsage.parseDailyTotalCost("[]".data(using: .utf8)!)
+        #expect(total == 0)
+    }
+
+    @Test func sinceStringIsAlwaysGregorian() {
+        // Regression: on a Thai Buddhist system calendar (en_TH), Calendar.current
+        // formats 2026-07-16 as 25690716, which ccusage reads as far future.
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let noon = utc.date(from: DateComponents(year: 2026, month: 7, day: 16, hour: 12))!
+        // Compare in the local zone the helper uses, keeping the test host-TZ-proof.
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = TimeZone.current
+        let expected = local.date(byAdding: .day, value: -6, to: noon)!
+        let parts = local.dateComponents([.year, .month, .day], from: expected)
+        let expectedString = String(format: "%04d%02d%02d", parts.year!, parts.month!, parts.day!)
+        #expect(CCUsageRunner.sinceString(daysBack: 7, from: noon) == expectedString)
+        #expect(CCUsageRunner.sinceString(daysBack: 7, from: noon).hasPrefix("2026"))
+    }
 }
 
 @Suite struct OfficialAPIParsingTests {

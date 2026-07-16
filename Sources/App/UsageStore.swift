@@ -71,23 +71,30 @@ final class UsageStore: ObservableObject {
         var block: CCUsage.ActiveBlock?
         var weeklyCost: Double?
         var estimateErr: String?
+        var blockSucceeded = false
         do {
-            let estimate = try await runner.fetchEstimate()
-            block = estimate.block
-            weeklyCost = estimate.weeklyCostUSD
+            block = try await runner.fetchActiveBlock()
+            blockSucceeded = true
         } catch {
             estimateErr = error.localizedDescription
+        }
+        do {
+            weeklyCost = try await runner.fetchWeeklyCost()
+        } catch {
+            estimateErr = estimateErr ?? error.localizedDescription
         }
 
         officialWarning = officialErr
 
-        if official == nil && block == nil && weeklyCost == nil {
+        let estimateAvailable = blockSucceeded || weeklyCost != nil
+        if official == nil && !estimateAvailable {
             // Both sources failed — keep the stale snapshot visible, surface the error.
             lastError = officialErr ?? estimateErr ?? "No usage data available."
             return
         }
 
-        lastError = nil
+        // Partial estimate failure renders as a footnote under the meters.
+        lastError = estimateErr
         snapshot = SnapshotBuilder.build(
             official: official,
             block: block,
