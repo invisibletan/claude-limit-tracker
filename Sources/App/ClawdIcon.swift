@@ -35,26 +35,50 @@ enum ClawdIcon {
     static func ring(percent: Double?, state: HealthState, size: CGFloat) -> NSImage {
         NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            let lineWidth = size * 0.14
-            let circleRect = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
-            ctx.setLineWidth(lineWidth)
-            ctx.setLineCap(.round)
-            NSColor.secondaryLabelColor.withAlphaComponent(0.3).setStroke()
-            ctx.strokeEllipse(in: circleRect)
+            drawRing(ctx: ctx, rect: rect, size: size, percent: percent, state: state)
+            return true
+        }
+    }
 
-            let fraction = max(0, min(1, (percent ?? 0) / 100))
-            if fraction > 0.01 {
-                ctx.beginPath()
-                ctx.addArc(
-                    center: CGPoint(x: rect.midX, y: rect.midY),
-                    radius: circleRect.width / 2,
-                    startAngle: .pi / 2,
-                    endAngle: .pi / 2 - 2 * .pi * CGFloat(fraction),
-                    clockwise: true
-                )
-                ringColor(for: state).setStroke()
-                ctx.strokePath()
-            }
+    private static func drawRing(ctx: CGContext, rect: CGRect, size: CGFloat, percent: Double?, state: HealthState) {
+        let lineWidth = size * 0.16
+        let circleRect = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
+        ctx.setLineWidth(lineWidth)
+        ctx.setLineCap(.round)
+        // Neutral track that stays visible on light, dark, and highlighted menu bars.
+        NSColor(white: 0.6, alpha: 0.6).setStroke()
+        ctx.strokeEllipse(in: circleRect)
+
+        let fraction = max(0, min(1, (percent ?? 0) / 100))
+        if fraction > 0.01 {
+            ctx.beginPath()
+            ctx.addArc(
+                center: CGPoint(x: rect.midX, y: rect.midY),
+                radius: circleRect.width / 2,
+                startAngle: .pi / 2,
+                endAngle: .pi / 2 - 2 * .pi * CGFloat(fraction),
+                clockwise: true
+            )
+            ringColor(for: state).setStroke()
+            ctx.strokePath()
+        }
+    }
+
+    /// One composited image — Clawd on the left, the usage ring to its right —
+    /// so the whole thing renders reliably as a single menu bar label image.
+    static func menuBarImage(percent: Double?, state: HealthState, phase: Double, height: CGFloat) -> NSImage {
+        let clawdWidth = height * CGFloat(gridW / gridH)
+        let ringSize = height * 0.86
+        let gap = height * 0.30
+        let totalWidth = clawdWidth + gap + ringSize
+        return NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
+            drawRing(
+                ctx: ctx,
+                rect: CGRect(x: clawdWidth + gap, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
+                size: ringSize, percent: percent, state: state
+            )
             return true
         }
     }

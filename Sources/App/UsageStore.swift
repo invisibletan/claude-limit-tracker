@@ -54,7 +54,12 @@ final class UsageStore: ObservableObject {
         let activity = snapshot?.activityLevel ?? 0
         let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
         walkPhase = (walkPhase + cyclesPerSecond * dt).truncatingRemainder(dividingBy: 1)
-        iconImage = ClawdIcon.sprite(phase: walkPhase, height: 20)
+        iconImage = ClawdIcon.menuBarImage(
+            percent: snapshot?.fiveHour.percent,
+            state: spinState,
+            phase: walkPhase,
+            height: 20
+        )
     }
 
     private var spinState: HealthState {
