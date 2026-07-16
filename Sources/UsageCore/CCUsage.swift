@@ -39,7 +39,7 @@ public enum CCUsage {
         let tokens = (block["totalTokens"] as? NSNumber)?.doubleValue ?? 0
         var endTime: Date?
         if let stamp = block["endTime"] as? String {
-            endTime = OfficialAPI.parseISO8601(stamp)
+            endTime = Format.parseISO8601(stamp)
         }
         let burn = block["burnRate"] as? [String: Any]
         let projection = block["projection"] as? [String: Any]
@@ -187,12 +187,5 @@ public struct CCUsageRunner: Sendable {
         let since = Self.sinceString(daysBack: 7, from: now)
         let data = try await run(["daily", "--json", "--since", since])
         return try CCUsage.parseDailyTotalCost(data)
-    }
-
-    /// Fetches the active block and trailing-7-day total cost in one call.
-    public func fetchEstimate(now: Date = Date()) async throws -> (block: CCUsage.ActiveBlock?, weeklyCostUSD: Double) {
-        let block = try await fetchActiveBlock()
-        let weeklyCost = try await fetchWeeklyCost(now: now)
-        return (block, weeklyCost)
     }
 }

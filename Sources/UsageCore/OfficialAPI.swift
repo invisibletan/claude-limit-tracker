@@ -1,11 +1,15 @@
 import Foundation
 
-/// Exact usage percentages from Anthropic's OAuth usage endpoint — the same
-/// numbers claude.ai shows in Settings → Usage and Claude Code shows in /usage.
-///
-/// Requires an OAuth access token supplied by the user (e.g. from `claude setup-token`).
-/// This module never reads the macOS Keychain or any credential store.
+/// The exact usage windows shown at claude.ai Settings → Usage. The app reads
+/// these from `/v1/messages` rate-limit headers (`RateLimitUsage`); `OfficialAPI`
+/// parses the same shape from a JSON payload.
 public struct OfficialUsage: Sendable {
+    /// Utilization arrives on a 0–1 scale in some payloads and 0–100 in others;
+    /// normalize to 0–100.
+    public static func normalizedPercent(_ raw: Double) -> Double {
+        raw <= 1.0 ? raw * 100 : raw
+    }
+
     /// One rate-limit window (5-hour, weekly, model-specific weekly, …).
     public struct Window: Sendable {
         public var key: String
@@ -43,48 +47,25 @@ public struct OfficialUsage: Sendable {
 }
 
 public enum OfficialAPIError: Error, LocalizedError {
-    case httpStatus(Int)
     case malformedResponse
 
     public var errorDescription: String? {
         switch self {
-        case .httpStatus(let code):
-            return code == 401
-                ? "Token rejected (401) — refresh it with `claude setup-token`."
-                : "Usage endpoint returned HTTP \(code)."
         case .malformedResponse:
             return "Usage endpoint returned an unexpected payload."
         }
     }
 }
 
+/// Tolerant parser for a JSON usage payload of `{ window_key: { utilization, resets_at } }`.
+/// Kept as a general parser for any future JSON usage source; the app currently
+/// reads the same `OfficialUsage` windows from rate-limit headers (`RateLimitUsage`).
 public enum OfficialAPI {
-    public static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")!
-
     /// Preferred display order for known window keys; unknown keys follow after.
     private static let knownOrder = ["five_hour", "seven_day"]
 
-    public static func request(token: String) -> URLRequest {
-        var req = URLRequest(url: endpoint)
-        req.httpMethod = "GET"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        req.setValue("application/json", forHTTPHeaderField: "Accept")
-        req.timeoutInterval = 15
-        return req
-    }
-
-    public static func fetch(token: String, session: URLSession = .shared) async throws -> OfficialUsage {
-        let (data, response) = try await session.data(for: request(token: token))
-        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            throw OfficialAPIError.httpStatus(http.statusCode)
-        }
-        return try parse(data)
-    }
-
-    /// Tolerant parser: the payload is undocumented, so treat every top-level
-    /// object carrying a numeric `utilization` as a rate-limit window. That
-    /// keeps `five_hour`/`seven_day` working and picks up model-specific
+    /// Treats every top-level object carrying a numeric `utilization` as a
+    /// window — keeps `five_hour`/`seven_day` working and picks up model-specific
     /// windows (e.g. `seven_day_opus`) without knowing their names in advance.
     public static func parse(_ data: Data) throws -> OfficialUsage {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -94,17 +75,14 @@ public enum OfficialAPI {
         for (key, value) in root {
             guard let dict = value as? [String: Any],
                   let number = dict["utilization"] as? NSNumber else { continue }
-            // Some payload generations report 0–1, others 0–100. Normalize to 0–100.
-            let raw = number.doubleValue
-            let utilization = raw <= 1.0 ? raw * 100 : raw
             var resetsAt: Date?
             if let stamp = dict["resets_at"] as? String {
-                resetsAt = parseISO8601(stamp)
+                resetsAt = Format.parseISO8601(stamp)
             }
             windows.append(OfficialUsage.Window(
                 key: key,
                 label: label(forKey: key),
-                utilization: utilization,
+                utilization: OfficialUsage.normalizedPercent(number.doubleValue),
                 resetsAt: resetsAt
             ))
         }
@@ -133,14 +111,5 @@ public enum OfficialAPI {
             }
             return key.split(separator: "_").map { $0.capitalized }.joined(separator: " ")
         }
-    }
-
-    public static func parseISO8601(_ string: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = fractional.date(from: string) { return date }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: string)
     }
 }

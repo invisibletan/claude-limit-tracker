@@ -1,20 +1,19 @@
 import AppKit
-import UsageCore
 
 /// Draws the Clawd mascot — a chunky coral pixel critter (wide body, side nubs,
 /// two big eyes, four stubby legs) — and, separately, the usage ring gauge that
 /// sits to its right in the menu bar.
 enum ClawdIcon {
     static let coral = NSColor(srgbRed: 0xCC / 255, green: 0x6B / 255, blue: 0x4E / 255, alpha: 1)
-    static let coralDark = NSColor(srgbRed: 0xB4 / 255, green: 0x57 / 255, blue: 0x3D / 255, alpha: 1)
     static let eye = NSColor(srgbRed: 0.09, green: 0.07, blue: 0.06, alpha: 1)
 
-    static func ringColor(for state: HealthState) -> NSColor {
-        switch state {
-        case .good: return NSColor(calibratedRed: 0.25, green: 0.62, blue: 0.36, alpha: 1)
-        case .warn: return NSColor(calibratedRed: 0.85, green: 0.58, blue: 0.13, alpha: 1)
-        case .crit: return NSColor(calibratedRed: 0.82, green: 0.28, blue: 0.23, alpha: 1)
-        }
+    // Ring gauge: orange until it gets heavy, red once past the threshold.
+    static let ringOrange = NSColor(srgbRed: 0.91, green: 0.55, blue: 0.16, alpha: 1)
+    static let ringRed = NSColor(srgbRed: 0.82, green: 0.28, blue: 0.23, alpha: 1)
+    static let ringRedThreshold = 80.0
+
+    static func ringColor(forPercent percent: Double?) -> NSColor {
+        (percent ?? 0) >= ringRedThreshold ? ringRed : ringOrange
     }
 
     // Grid the critter is laid out on — wide and chunky, short legs.
@@ -31,16 +30,26 @@ enum ClawdIcon {
         }
     }
 
-    /// The usage ring gauge (no critter inside).
-    static func ring(percent: Double?, state: HealthState, size: CGFloat) -> NSImage {
-        NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
+    /// One composited image — Clawd on the left, the usage ring to its right —
+    /// so the whole thing renders reliably as a single menu bar label image.
+    static func menuBarImage(percent: Double?, phase: Double, height: CGFloat) -> NSImage {
+        let clawdWidth = height * CGFloat(gridW / gridH)
+        let ringSize = height * 0.86
+        let gap = height * 0.30
+        let totalWidth = clawdWidth + gap + ringSize
+        return NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            drawRing(ctx: ctx, rect: rect, size: size, percent: percent, state: state)
+            drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
+            drawRing(
+                ctx: ctx,
+                rect: CGRect(x: clawdWidth + gap, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
+                size: ringSize, percent: percent
+            )
             return true
         }
     }
 
-    private static func drawRing(ctx: CGContext, rect: CGRect, size: CGFloat, percent: Double?, state: HealthState) {
+    private static func drawRing(ctx: CGContext, rect: CGRect, size: CGFloat, percent: Double?) {
         let lineWidth = size * 0.16
         let circleRect = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
         ctx.setLineWidth(lineWidth)
@@ -59,27 +68,8 @@ enum ClawdIcon {
                 endAngle: .pi / 2 - 2 * .pi * CGFloat(fraction),
                 clockwise: true
             )
-            ringColor(for: state).setStroke()
+            ringColor(forPercent: percent).setStroke()
             ctx.strokePath()
-        }
-    }
-
-    /// One composited image — Clawd on the left, the usage ring to its right —
-    /// so the whole thing renders reliably as a single menu bar label image.
-    static func menuBarImage(percent: Double?, state: HealthState, phase: Double, height: CGFloat) -> NSImage {
-        let clawdWidth = height * CGFloat(gridW / gridH)
-        let ringSize = height * 0.86
-        let gap = height * 0.30
-        let totalWidth = clawdWidth + gap + ringSize
-        return NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { rect in
-            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
-            drawRing(
-                ctx: ctx,
-                rect: CGRect(x: clawdWidth + gap, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
-                size: ringSize, percent: percent, state: state
-            )
-            return true
         }
     }
 

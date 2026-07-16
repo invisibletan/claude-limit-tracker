@@ -6,6 +6,9 @@ import Foundation
 /// matches claude.ai Settings → Usage); ccusage fills in cost detail and burn
 /// rate, and carries the whole snapshot alone when no token is configured.
 public enum SnapshotBuilder {
+    /// Burn rate (tokens/min) that maps to a fully-spun mascot.
+    private static let busyTokensPerMinute = 200_000.0
+
     public static func build(
         official: OfficialUsage?,
         block: CCUsage.ActiveBlock?,
@@ -28,15 +31,13 @@ public enum SnapshotBuilder {
             )
         }
 
-        var burnRateText: String?
-        if let tpm = block?.tokensPerMinute {
-            burnRateText = Format.tokensPerMinute(tpm)
-        }
+        let burnTokensPerMinute = block?.tokensPerMinute
+        let burnRateText = burnTokensPerMinute.map(Format.tokensPerMinute)
 
         // Spin signal: prefer live burn rate, else how full the 5-hour window is.
         let activity: Double
-        if let tpm = block?.tokensPerMinute {
-            activity = min(1, tpm / 200_000)
+        if let tpm = burnTokensPerMinute {
+            activity = min(1, tpm / busyTokensPerMinute)
         } else {
             activity = min(1, max(0, (fiveHour.percent ?? 0) / 100))
         }

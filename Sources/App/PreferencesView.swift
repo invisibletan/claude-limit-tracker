@@ -5,9 +5,9 @@ import UsageCore
 struct PreferencesView: View {
     @ObservedObject var store: UsageStore
 
-    @AppStorage(PrefKey.cap5h) private var cap5h = 35.0
-    @AppStorage(PrefKey.capWeekly) private var capWeekly = 9000.0
-    @AppStorage(PrefKey.refreshInterval) private var refreshInterval = 30.0
+    @AppStorage(PrefKey.cap5h) private var cap5h = PrefKey.defaultCap5h
+    @AppStorage(PrefKey.capWeekly) private var capWeekly = PrefKey.defaultCapWeekly
+    @AppStorage(PrefKey.refreshInterval) private var refreshInterval = PrefKey.defaultRefreshInterval
     @AppStorage(PrefKey.ccusagePath) private var ccusagePath = ""
 
     @State private var tokenInput = TokenStore.load() ?? ""

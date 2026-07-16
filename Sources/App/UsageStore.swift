@@ -3,12 +3,16 @@ import SwiftUI
 import AppKit
 import UsageCore
 
-/// Defaults keys shared between the store and Preferences.
+/// Defaults keys (and their default values) shared between the store and Preferences.
 enum PrefKey {
     static let cap5h = "capFiveHourUSD"
     static let capWeekly = "capWeeklyUSD"
     static let refreshInterval = "refreshIntervalSeconds"
     static let ccusagePath = "ccusagePathOverride"
+
+    static let defaultCap5h = 35.0
+    static let defaultCapWeekly = 9000.0
+    static let defaultRefreshInterval = 60.0
 }
 
 @MainActor
@@ -49,24 +53,16 @@ final class UsageStore: ObservableObject {
     }
 
     /// Advances and re-renders Clawd: walk cadence rises with activity, and the
-    /// ring shows the 5-hour usage colored by the worse of the two limits.
+    /// ring shows the 5-hour usage (orange, red past the threshold).
     private func advanceWalk(dt: Double) {
         let activity = snapshot?.activityLevel ?? 0
         let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
         walkPhase = (walkPhase + cyclesPerSecond * dt).truncatingRemainder(dividingBy: 1)
         iconImage = ClawdIcon.menuBarImage(
             percent: snapshot?.fiveHour.percent,
-            state: spinState,
             phase: walkPhase,
             height: 20
         )
-    }
-
-    private var spinState: HealthState {
-        let states = [snapshot?.fiveHour.state, snapshot?.weekly.state].compactMap { $0 }
-        if states.contains(.crit) { return .crit }
-        if states.contains(.warn) { return .warn }
-        return .good
     }
 
     private func registerDefaults() {
@@ -74,10 +70,10 @@ final class UsageStore: ObservableObject {
         // Settings → Usage page: weekly ~$9,000 maps ~$458 spent to ~5%,
         // 5-hour ~$35 maps a hot session to ~20%. Tunable in Preferences.
         UserDefaults.standard.register(defaults: [
-            PrefKey.cap5h: 35.0,
-            PrefKey.capWeekly: 9000.0,
+            PrefKey.cap5h: PrefKey.defaultCap5h,
+            PrefKey.capWeekly: PrefKey.defaultCapWeekly,
             // Each official read spends ~1 token; 60s keeps that negligible.
-            PrefKey.refreshInterval: 60.0,
+            PrefKey.refreshInterval: PrefKey.defaultRefreshInterval,
         ])
     }
 
@@ -107,18 +103,22 @@ final class UsageStore: ObservableObject {
         // 2. Local estimate from ccusage — cost detail, burn rate, and the
         // meters/percentages used when no token is configured.
         let runner = CCUsageRunner(overridePath: UserDefaults.standard.string(forKey: PrefKey.ccusagePath))
+        // Both spawn a ccusage subprocess — run them concurrently to halve latency.
+        async let blockResult = runner.fetchActiveBlock()
+        async let weeklyResult = runner.fetchWeeklyCost()
+
         var block: CCUsage.ActiveBlock?
         var weeklyCost: Double?
         var estimateErr: String?
         var blockSucceeded = false
         do {
-            block = try await runner.fetchActiveBlock()
+            block = try await blockResult
             blockSucceeded = true
         } catch {
             estimateErr = error.localizedDescription
         }
         do {
-            weeklyCost = try await runner.fetchWeeklyCost()
+            weeklyCost = try await weeklyResult
         } catch {
             estimateErr = estimateErr ?? error.localizedDescription
         }

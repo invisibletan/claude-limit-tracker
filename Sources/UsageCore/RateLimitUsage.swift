@@ -18,7 +18,7 @@ public enum RateLimitUsage {
         func window(prefix: String, key: String, label: String) -> OfficialUsage.Window? {
             guard let raw = lower["anthropic-ratelimit-unified-\(prefix)-utilization"],
                   let value = Double(raw) else { return nil }
-            let utilization = value <= 1.0 ? value * 100 : value
+            let utilization = OfficialUsage.normalizedPercent(value)
             var resetsAt: Date?
             if let resetRaw = lower["anthropic-ratelimit-unified-\(prefix)-reset"],
                let epoch = Double(resetRaw) {
