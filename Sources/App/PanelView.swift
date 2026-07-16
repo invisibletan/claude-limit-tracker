@@ -60,7 +60,8 @@ struct PanelView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .center) {
+            ClawdView(size: 20)
             Text("Claude Usage").font(.headline)
             Spacer()
             if let snapshot = store.snapshot {
@@ -82,17 +83,9 @@ struct PanelView: View {
             .foregroundStyle(.tertiary)
 
         if snapshot.source == .localEstimate {
-            HStack(spacing: 6) {
-                Text("Exact numbers: run `claude setup-token`, paste in Preferences")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                Button("Copy command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString("claude setup-token", forType: .string)
-                }
+            Text("Exact numbers: sign in with Claude from Preferences")
                 .font(.caption2)
-                .buttonStyle(.link)
-            }
+                .foregroundStyle(.orange)
         }
     }
 

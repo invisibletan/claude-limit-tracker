@@ -55,14 +55,24 @@ final class UsageStore: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        // 1. Official percentages, if the user configured a token.
+        // 1. Official percentages, if the user has signed in.
         var official: OfficialUsage?
         var officialErr: String?
-        if let token = TokenStore.load() {
-            do {
-                official = try await OfficialAPI.fetch(token: token)
-            } catch {
-                officialErr = error.localizedDescription
+        if var creds = TokenStore.loadCredentials() {
+            if creds.needsRefresh, let refreshToken = creds.refreshToken {
+                do {
+                    creds = try await ClaudeOAuth.refresh(refreshToken: refreshToken)
+                    try? TokenStore.save(creds)
+                } catch {
+                    officialErr = "Session refresh failed — \(error.localizedDescription)"
+                }
+            }
+            if officialErr == nil {
+                do {
+                    official = try await OfficialAPI.fetch(token: creds.accessToken)
+                } catch {
+                    officialErr = error.localizedDescription
+                }
             }
         }
 
