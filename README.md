@@ -141,3 +141,9 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 
 - Rate-limit-header technique inspired by **[Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter)**.
 - Clawd 🐾 — your friendly usage companion.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © invisibletan
