@@ -56,8 +56,8 @@ import Testing
 @Suite struct PaceFormattingTests {
     @Test func paceStrings() {
         #expect(Format.pace(nil) == "")
-        #expect(Format.pace(Pace(ratio: 1, state: .steady, projectedPercent: 40, timeToLimit: nil)) == "steady")
-        #expect(Format.pace(Pace(ratio: 0.5, state: .slow, projectedPercent: 20, timeToLimit: nil)) == "slow")
+        #expect(Format.pace(Pace(ratio: 1, state: .steady, projectedPercent: 40, timeToLimit: nil)) == "😎 steady")
+        #expect(Format.pace(Pace(ratio: 0.5, state: .slow, projectedPercent: 20, timeToLimit: nil)) == "🐢 slow")
         #expect(Format.pace(Pace(ratio: 2, state: .fast, projectedPercent: 200, timeToLimit: 5400)) == "🔥 fast · ~1h 30m left")
     }
 

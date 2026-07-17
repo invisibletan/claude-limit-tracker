@@ -38,8 +38,8 @@ public enum Format {
         var text: String
         switch pace.state {
         case .fast: text = "🔥 fast"
-        case .steady: text = "steady"
-        case .slow: text = "slow"
+        case .steady: text = "😎 steady"
+        case .slow: text = "🐢 slow"
         }
         if let ttl = pace.timeToLimit {
             text += " · ~\(shortDuration(ttl)) left"
