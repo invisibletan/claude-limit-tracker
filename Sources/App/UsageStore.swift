@@ -7,6 +7,8 @@ import UsageCore
 enum PrefKey {
     static let refreshInterval = "refreshIntervalSeconds"
     static let defaultRefreshInterval = 60.0
+    static let showMenuBarNames = "showMenuBarNames"
+    static let defaultShowMenuBarNames = true
 }
 
 /// Fetched usage for one account.
@@ -30,7 +32,10 @@ final class UsageStore: ObservableObject {
     var hasAccounts: Bool { !accounts.isEmpty }
 
     init() {
-        UserDefaults.standard.register(defaults: [PrefKey.refreshInterval: PrefKey.defaultRefreshInterval])
+        UserDefaults.standard.register(defaults: [
+            PrefKey.refreshInterval: PrefKey.defaultRefreshInterval,
+            PrefKey.showMenuBarNames: PrefKey.defaultShowMenuBarNames,
+        ])
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
@@ -67,7 +72,8 @@ final class UsageStore: ObservableObject {
 
     private var menuBarEntries: [(name: String?, percent: Double?)] {
         let visible = accounts.filter(\.showInMenuBar)
-        let showNames = visible.count > 1
+        let namesOn = UserDefaults.standard.bool(forKey: PrefKey.showMenuBarNames)
+        let showNames = namesOn && visible.count > 1
         return visible.map { account in
             (showNames ? account.name : nil, usage[account.id]?.snapshot?.fiveHour.percent)
         }

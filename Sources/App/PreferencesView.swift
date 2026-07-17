@@ -6,6 +6,7 @@ struct PreferencesView: View {
     @ObservedObject var store: UsageStore
 
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval = PrefKey.defaultRefreshInterval
+    @AppStorage(PrefKey.showMenuBarNames) private var showMenuBarNames = PrefKey.defaultShowMenuBarNames
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -82,6 +83,7 @@ struct PreferencesView: View {
                         Text("seconds")
                         Spacer()
                     }
+                    Toggle("Show account names on menu bar", isOn: $showMenuBarNames)
                     Toggle("Launch at login", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                     if let launchError {
