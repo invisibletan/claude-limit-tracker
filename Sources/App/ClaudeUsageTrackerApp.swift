@@ -19,12 +19,7 @@ struct ClaudeUsageTrackerApp: App {
     }
 
     private var menuBarLabel: some View {
-        // Single composited image (Clawd + ring) plus the live 5-hour %.
-        HStack(spacing: 4) {
-            Image(nsImage: store.iconImage ?? ClawdIcon.menuBarImage(percent: nil, phase: 0, height: 20))
-            Text(Format.percent(store.snapshot?.fiveHour.percent))
-                .font(.system(size: 12, weight: .semibold))
-                .monospacedDigit()
-        }
+        // Everything (Clawd + per-account rings + names + %) is one image.
+        Image(nsImage: store.iconImage ?? ClawdIcon.menuBarImage(entries: [], phase: 0, height: 20))
     }
 }

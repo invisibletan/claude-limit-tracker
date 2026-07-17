@@ -24,6 +24,29 @@ public enum Format {
         return "resets \(formatter.string(from: date))"
     }
 
+    /// "1h 10m", "45m", "2m" — a compact duration for the pace line.
+    public static func shortDuration(_ seconds: TimeInterval) -> String {
+        let minutes = max(0, Int((seconds / 60).rounded()))
+        if minutes < 60 { return "\(minutes)m" }
+        let h = minutes / 60, m = minutes % 60
+        return m == 0 ? "\(h)h" : "\(h)h \(m)m"
+    }
+
+    /// "🔥 fast · ~1h 10m left" / "steady" / "slow".
+    public static func pace(_ pace: Pace?) -> String {
+        guard let pace else { return "" }
+        var text: String
+        switch pace.state {
+        case .fast: text = "🔥 fast"
+        case .steady: text = "steady"
+        case .slow: text = "slow"
+        }
+        if let ttl = pace.timeToLimit {
+            text += " · ~\(shortDuration(ttl)) left"
+        }
+        return text
+    }
+
     /// "updated 12s ago" / "updated 3m ago".
     public static func updatedAgo(_ date: Date, now: Date = Date()) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(date)))

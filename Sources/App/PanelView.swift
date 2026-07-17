@@ -1,7 +1,7 @@
 import SwiftUI
 import UsageCore
 
-/// The dropdown panel: two limit meters and actions.
+/// The dropdown panel: each account's two limit meters, plus actions.
 struct PanelView: View {
     @ObservedObject var store: UsageStore
     @Environment(\.openSettings) private var openSettings
@@ -10,22 +10,14 @@ struct PanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            if let snapshot = store.snapshot {
-                MeterView(title: "5-hour limit", meter: snapshot.fiveHour)
-                MeterView(title: "Weekly limit", meter: snapshot.weekly)
-                if let error = store.lastError {
-                    Text(error).font(.caption2).foregroundStyle(.orange)
-                }
-            } else if store.needsToken {
-                Text("Add a token in Preferences to see your usage.")
+            if store.accounts.isEmpty {
+                Text("Add an account in Preferences to see your usage.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else if let error = store.lastError {
-                Text(error).font(.caption).foregroundStyle(.red)
             } else {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Reading usage…").font(.caption).foregroundStyle(.secondary)
+                ForEach(Array(store.accounts.enumerated()), id: \.element.id) { index, account in
+                    if index > 0 { Divider() }
+                    accountSection(account)
                 }
             }
 
@@ -33,7 +25,35 @@ struct PanelView: View {
             actions
         }
         .padding(12)
-        .frame(width: 280)
+        .frame(width: 300)
+    }
+
+    @ViewBuilder
+    private func accountSection(_ account: Account) -> some View {
+        let entry = store.usage[account.id]
+        VStack(alignment: .leading, spacing: 6) {
+            if store.accounts.count > 1 {
+                HStack(spacing: 5) {
+                    if account.showInMenuBar {
+                        Circle().fill(Color.secondary).frame(width: 5, height: 5)
+                    }
+                    Text(account.name)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let snapshot = entry?.snapshot {
+                MeterView(title: "5-hour limit", meter: snapshot.fiveHour)
+                MeterView(title: "Weekly limit", meter: snapshot.weekly)
+            } else if let error = entry?.error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading…").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private var header: some View {
@@ -41,9 +61,9 @@ struct PanelView: View {
             ClawdView(size: 20)
             Text("Claude Usage").font(.headline)
             Spacer()
-            if let snapshot = store.snapshot {
+            if let updated = store.usage.values.compactMap({ $0.snapshot?.updatedAt }).max() {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text(Format.updatedAgo(snapshot.updatedAt, now: context.date))
+                    Text(Format.updatedAgo(updated, now: context.date))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -116,9 +136,15 @@ struct MeterView: View {
             }
             .frame(height: 7)
 
-            if !meter.resetText.isEmpty {
-                Text(meter.resetText).font(.caption2).foregroundStyle(.secondary)
+            if !subtitle.isEmpty {
+                Text(subtitle).font(.caption2).foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// "resets in 3h · 🔥 fast · ~1h 10m left"
+    private var subtitle: String {
+        let paceText = Format.pace(meter.pace)
+        return [meter.resetText, paceText].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 }

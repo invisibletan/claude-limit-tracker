@@ -6,10 +6,13 @@ public struct Meter: Sendable {
     public var percent: Double?
     /// e.g. "resets in 49 min" / "resets Sat 20:00"
     public var resetText: String
+    /// How fast this window is being consumed; nil when unknown/too early.
+    public var pace: Pace?
 
-    public init(percent: Double?, resetText: String) {
+    public init(percent: Double?, resetText: String, pace: Pace? = nil) {
         self.percent = percent
         self.resetText = resetText
+        self.pace = pace
     }
 }
 

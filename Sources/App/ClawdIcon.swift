@@ -1,4 +1,5 @@
 import AppKit
+import UsageCore
 
 /// Draws the Clawd mascot — a chunky coral pixel critter (wide body, side nubs,
 /// two big eyes, four stubby legs) — and, separately, the usage ring gauge that
@@ -21,21 +22,61 @@ enum ClawdIcon {
         }
     }
 
-    /// One composited image — Clawd on the left, the usage ring to its right —
-    /// so the whole thing renders reliably as a single menu bar label image.
-    static func menuBarImage(percent: Double?, phase: Double, height: CGFloat) -> NSImage {
+    /// One composited image for the whole menu bar label — Clawd on the left,
+    /// then one `[name] ring NN%` segment per visible account. Everything is a
+    /// single image because `MenuBarExtra` labels drop all but the first image.
+    /// `name` is nil for a single account (matches the original look).
+    static func menuBarImage(entries: [(name: String?, percent: Double?)], phase: Double, height: CGFloat) -> NSImage {
+        let items = entries.isEmpty ? [(name: Optional<String>.none, percent: Optional<Double>.none)] : entries
         let clawdWidth = height * CGFloat(gridW / gridH)
-        let ringSize = height * 0.86
-        let gap = height * 0.30
-        let totalWidth = clawdWidth + gap + ringSize
-        return NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { rect in
+        let ringSize = height * 0.82
+        let gapMascot = height * 0.28
+        let gapEntry = height * 0.44
+        let gapNameRing = height * 0.16
+        let gapRingPct = height * 0.12
+
+        let font = NSFont.monospacedDigitSystemFont(ofSize: height * 0.62, weight: .semibold)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+
+        func nameString(_ name: String?) -> NSAttributedString? {
+            guard let name, !name.isEmpty else { return nil }
+            let trimmed = name.count > 8 ? String(name.prefix(8)) : name
+            return NSAttributedString(string: trimmed, attributes: attrs)
+        }
+
+        var segments: [(name: NSAttributedString?, pct: NSAttributedString, percent: Double?, width: CGFloat)] = []
+        for item in items {
+            let name = nameString(item.name)
+            let pct = NSAttributedString(string: Format.percent(item.percent), attributes: attrs)
+            var width = ringSize + gapRingPct + ceil(pct.size().width)
+            if let name { width += ceil(name.size().width) + gapNameRing }
+            segments.append((name, pct, item.percent, width))
+        }
+
+        var total = clawdWidth
+        for (i, seg) in segments.enumerated() { total += (i == 0 ? gapMascot : gapEntry) + seg.width }
+
+        return NSImage(size: NSSize(width: total, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
-            drawRing(
-                ctx: ctx,
-                rect: CGRect(x: clawdWidth + gap, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
-                size: ringSize, percent: percent
-            )
+            var x = clawdWidth
+            for (i, seg) in segments.enumerated() {
+                x += (i == 0 ? gapMascot : gapEntry)
+                if let name = seg.name {
+                    let sz = name.size()
+                    name.draw(at: NSPoint(x: x, y: (height - sz.height) / 2))
+                    x += ceil(sz.width) + gapNameRing
+                }
+                drawRing(
+                    ctx: ctx,
+                    rect: CGRect(x: x, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
+                    size: ringSize, percent: seg.percent
+                )
+                x += ringSize + gapRingPct
+                let psz = seg.pct.size()
+                seg.pct.draw(at: NSPoint(x: x, y: (height - psz.height) / 2))
+                x += ceil(psz.width)
+            }
             return true
         }
     }
