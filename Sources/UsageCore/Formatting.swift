@@ -32,19 +32,32 @@ public enum Format {
         return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 
-    /// "🔥 fast · ~1h 10m left" / "steady" / "slow".
-    public static func pace(_ pace: Pace?) -> String {
-        guard let pace else { return "" }
+    public static func paceEmoji(_ pace: Pace) -> String {
+        switch pace.state {
+        case .fast: return "🔥"
+        case .steady: return "😎"
+        case .slow: return "🐢"
+        }
+    }
+
+    /// The pace text WITHOUT the emoji, e.g. "fast · ~1h 10m left" / "steady".
+    public static func paceLabel(_ pace: Pace) -> String {
         var text: String
         switch pace.state {
-        case .fast: text = "🔥 fast"
-        case .steady: text = "😎 steady"
-        case .slow: text = "🐢 slow"
+        case .fast: text = "fast"
+        case .steady: text = "steady"
+        case .slow: text = "slow"
         }
         if let ttl = pace.timeToLimit {
             text += " · ~\(shortDuration(ttl)) left"
         }
         return text
+    }
+
+    /// "🔥 fast · ~1h 10m left" / "😎 steady" / "🐢 slow" (emoji + label as one string).
+    public static func pace(_ pace: Pace?) -> String {
+        guard let pace else { return "" }
+        return "\(paceEmoji(pace)) \(paceLabel(pace))"
     }
 
     /// "updated 12s ago" / "updated 3m ago".

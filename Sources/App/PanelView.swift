@@ -136,15 +136,23 @@ struct MeterView: View {
             }
             .frame(height: 7)
 
-            if !subtitle.isEmpty {
-                Text(subtitle).font(.caption2).foregroundStyle(.secondary)
+            if let subtitle {
+                subtitle.font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
 
-    /// "resets in 3h · 🔥 fast · ~1h 10m left"
-    private var subtitle: String {
-        let paceText = Format.pace(meter.pace)
-        return [meter.resetText, paceText].filter { !$0.isEmpty }.joined(separator: " · ")
+    /// "resets in 3h · 🔥 fast · ~1h 10m left" — the pace emoji is a separate
+    /// Text run nudged up so it sits on the text baseline (emoji render low).
+    private var subtitle: Text? {
+        guard let pace = meter.pace else {
+            return meter.resetText.isEmpty ? nil : Text(meter.resetText)
+        }
+        let emoji = Text(Format.paceEmoji(pace)).baselineOffset(2)
+        let label = Text(" " + Format.paceLabel(pace))
+        if meter.resetText.isEmpty {
+            return emoji + label
+        }
+        return Text(meter.resetText + " · ") + emoji + label
     }
 }
