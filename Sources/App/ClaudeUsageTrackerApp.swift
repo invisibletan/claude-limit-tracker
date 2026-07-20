@@ -20,6 +20,6 @@ struct ClaudeUsageTrackerApp: App {
 
     private var menuBarLabel: some View {
         // Everything (Clawd + per-account rings + names + %) is one image.
-        Image(nsImage: store.iconImage ?? ClawdIcon.menuBarImage(entries: [], phase: 0, height: 20))
+        Image(nsImage: store.iconImage ?? ClawdIcon.menuBarImage(entries: [], phase: 0, height: 20, config: MenuBarConfig()))
     }
 }

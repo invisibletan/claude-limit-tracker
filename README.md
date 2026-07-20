@@ -20,10 +20,13 @@ A tiny, native macOS menu bar app. An animated pixel **Clawd** 🐾 walks across
 ## ✨ Features
 
 - 🐾 **Animated Clawd mascot** — walks faster the harder you're using Claude.
-- ⭕ **Usage ring** — fills with your 5-hour usage; **orange** normally, **red** past 80%.
+- ⭕ **Usage ring** — fills with your 5-hour usage; **orange** normally, **red** past 80% (the % text turns red too).
 - 👥 **Multiple accounts** — track up to **10** Claude accounts side by side; show or hide each one on the menu bar.
-- 🔥 **Pace signal** — tells you whether you're burning **🔥 fast**, **😎 steady**, or **🐢 slow**, with an estimated time until you hit the limit.
-- 📊 **Both limits at a glance** — 5-hour and weekly meters per account in a click-through panel.
+- 🔥 **Pace signal** — whether each window is burning **fast**, **steady**, or **slow**: monochrome flame / equals / tortoise glyphs right in the menu bar (they adapt to light/dark like system items), 🔥/😎/🐢 emoji with an estimated time-to-limit in the panel.
+- 🎛️ **Composable menu bar, per window** — each of the 5-hour and weekly windows gets two checkbox sets: **Elements** (Ring · Percent · Glyph) picks what renders, **Visible when pace is** (🐢 = 🔥) hides an account's whole group while its pace is an unchecked state — e.g. 🔥-only turns the bar into an attention-only display that stays silent until something burns.
+- 🧷 **Never-empty item** — hide everything and the mascot steps in; hide the mascot too and the ring returns. The menu bar item always stays clickable.
+- 🌫️ **Staleness dimming** — if an account hasn't refreshed successfully for ~10 minutes, its whole segment fades so you know the numbers are old.
+- 📊 **Both limits at a glance** — 5-hour and weekly meters per account in a click-through panel; optional weekly ring on the bar.
 - 🎯 **Exact numbers** — the same figures as *claude.ai → Settings → Usage*, not an estimate.
 - 🪶 **Featherweight** — one small binary, no dependencies, no background bloat.
 - 🔒 **Private by design** — tokens stay on your Mac (a `0600` file, never the Keychain).
@@ -80,9 +83,13 @@ The **pace** is derived locally: it compares how much you've used against how fa
 
 ## 🖥️ In the menu bar
 
+Per shown account: `name  ring NN% <pace>  W:MM% <pace>` — every piece optional (see Preferences).
+
 - 🐾 **Clawd** strolls along — pace scales with your usage.
-- ⭕ A **ring** per shown account fills with its 5-hour usage.
-- 🟠 → 🔴 Everything turns **red at 80%**, so you notice before you hit the wall.
+- ⭕ The **ring** and first **%** are the 5-hour window; **`W:`** is the weekly window.
+- 🔥 The **pace glyph** (flame / equals / tortoise, monochrome) shows each window's burn pace vs an even burn; hidden while a window is too fresh to judge.
+- 🟠 → 🔴 Ring and % turn **red at 80%**, so you notice before you hit the wall.
+- 🌫️ A segment **fades** when its data is stale (no successful refresh in ~10 min).
 - 🖱️ **Click** to open the panel: each account's **5-hour** and **weekly** meters, each showing the reset time and the pace — e.g. `resets in 3h · 🔥 fast · ~1h 10m left`.
 
 ---
@@ -98,12 +105,25 @@ The **pace** is derived locally: it compares how much you've used against how fa
 | **Menu bar** | Per-account toggle — show or hide that account's ring on the menu bar. |
 | **🗑️** | Remove an account. |
 
+**Menu bar**
+
+| Setting | What it does |
+| --- | --- |
+| **Clawd mascot** | Show or hide Clawd (he still appears if everything else is hidden — the item never goes empty). |
+| **Account names** | Label each account's segment with its name. |
+
+**Session (5-hour) on menu bar** · **Weekly (W:) on menu bar** — one section each, with two rows:
+
+| Row | Checkboxes | What it does |
+| --- | --- | --- |
+| **Elements** | Ring · Percent · Glyph | Which pieces of that window's group render. |
+| **Visible when pace is** | 🐢 Slow · = Steady · 🔥 Fast | Filters the **whole group** by current pace — while a window's pace is an unchecked state, that account's group is hidden until the pace changes (unknown pace always shows). |
+
 **Behavior**
 
 | Setting | What it does |
 | --- | --- |
 | **Refresh every … seconds** | How often to poll — default **60s** (~1 token per account each refresh). |
-| **Show account names on menu bar** | Label each ring with its account name. |
 | **Launch at login** | Start with macOS via `SMAppService`. |
 
 Accounts are stored at `~/Library/Application Support/ClaudeUsageTracker/accounts.json` (`0600`). A legacy single-token file is migrated automatically on first launch.
@@ -121,9 +141,9 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 
 **Project layout**
 
-- `Sources/UsageCore/` — the testable data core: fetch + parse rate-limit headers, build snapshots, compute pace, formatting.
-- `Sources/App/` — the SwiftUI app: `MenuBarExtra`, Clawd mascot + ring drawing, panel, preferences, per-account store.
-- `Tests/UsageCoreTests/` — header-parsing, snapshot, and pace tests.
+- `Sources/UsageCore/` — the testable data core: fetch + parse rate-limit headers, build snapshots, compute pace, formatting, plus the menu bar composition model (`MenuBarConfig`, `PaceSelection`, never-empty guards, staleness rule, legacy-pref migration).
+- `Sources/App/` — the SwiftUI app: `MenuBarExtra`, Clawd mascot + token-stream segment drawing, panel, preferences, per-account store.
+- `Tests/UsageCoreTests/` — header-parsing, snapshot, pace, menu-bar-layout, and migration tests (40 tests).
 
 > 🧪 `test.sh` adds flags so `swift-testing` links under **Command Line Tools only** (no full Xcode needed). With full Xcode, plain `swift test` works too.
 

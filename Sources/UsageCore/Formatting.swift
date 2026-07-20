@@ -32,12 +32,16 @@ public enum Format {
         return m == 0 ? "\(h)h" : "\(h)h \(m)m"
     }
 
-    public static func paceEmoji(_ pace: Pace) -> String {
-        switch pace.state {
+    public static func paceEmoji(_ state: Pace.State) -> String {
+        switch state {
         case .fast: return "🔥"
         case .steady: return "😎"
         case .slow: return "🐢"
         }
+    }
+
+    public static func paceEmoji(_ pace: Pace) -> String {
+        paceEmoji(pace.state)
     }
 
     /// The pace text WITHOUT the emoji, e.g. "fast · ~1h 10m left" / "steady".

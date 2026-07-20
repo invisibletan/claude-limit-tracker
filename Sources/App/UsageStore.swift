@@ -9,6 +9,26 @@ enum PrefKey {
     static let defaultRefreshInterval = 60.0
     static let showMenuBarNames = "showMenuBarNames"
     static let defaultShowMenuBarNames = true
+    static let showMenuBarWeekly = "showMenuBarWeekly"
+    static let defaultShowMenuBarWeekly = true
+    /// Legacy picker key — read once for migration, no longer written.
+    static let legacyPaceDisplay = "menuBarPaceDisplay"
+    static let showMenuBarMascot = "showMenuBarMascot"
+    static let defaultShowMenuBarMascot = true
+    static let showMenuBarRing = "showMenuBarRing"
+    static let defaultShowMenuBarRing = true
+    static let showMenuBarPercent = "showMenuBarPercent"
+    static let defaultShowMenuBarPercent = true
+    static let showMenuBarWeeklyRing = "showMenuBarWeeklyRing"
+    static let defaultShowMenuBarWeeklyRing = false
+    static let sessionGlyph = "showMenuBarSessionGlyph"
+    static let weeklyGlyph = "showMenuBarWeeklyGlyph"
+    static let sessionPaceSlow = "showMenuBarSessionPaceSlow"
+    static let sessionPaceSteady = "showMenuBarSessionPaceSteady"
+    static let sessionPaceFast = "showMenuBarSessionPaceFast"
+    static let weeklyPaceSlow = "showMenuBarWeeklyPaceSlow"
+    static let weeklyPaceSteady = "showMenuBarWeeklyPaceSteady"
+    static let weeklyPaceFast = "showMenuBarWeeklyPaceFast"
 }
 
 /// Fetched usage for one account.
@@ -32,9 +52,41 @@ final class UsageStore: ObservableObject {
     var hasAccounts: Bool { !accounts.isEmpty }
 
     init() {
-        UserDefaults.standard.register(defaults: [
+        let defaults = UserDefaults.standard
+        // One-time migration: the retired pace picker value becomes per-state
+        // checkboxes (+ the ring-color toggle) the first time this build runs.
+        if defaults.object(forKey: PrefKey.sessionPaceFast) == nil,
+           let legacy = defaults.string(forKey: PrefKey.legacyPaceDisplay) {
+            let migrated = PaceDisplay.migrateLegacy(rawValue: legacy)
+            for (key, value) in [
+                PrefKey.sessionPaceSlow: migrated.selection.slow,
+                PrefKey.sessionPaceSteady: migrated.selection.steady,
+                PrefKey.sessionPaceFast: migrated.selection.fast,
+                PrefKey.weeklyPaceSlow: migrated.selection.slow,
+                PrefKey.weeklyPaceSteady: migrated.selection.steady,
+                PrefKey.weeklyPaceFast: migrated.selection.fast,
+                PrefKey.sessionGlyph: migrated.glyphs,
+                PrefKey.weeklyGlyph: migrated.glyphs,
+            ] {
+                defaults.set(value, forKey: key)
+            }
+        }
+        defaults.register(defaults: [
             PrefKey.refreshInterval: PrefKey.defaultRefreshInterval,
             PrefKey.showMenuBarNames: PrefKey.defaultShowMenuBarNames,
+            PrefKey.showMenuBarWeekly: PrefKey.defaultShowMenuBarWeekly,
+            PrefKey.showMenuBarMascot: PrefKey.defaultShowMenuBarMascot,
+            PrefKey.showMenuBarRing: PrefKey.defaultShowMenuBarRing,
+            PrefKey.showMenuBarPercent: PrefKey.defaultShowMenuBarPercent,
+            PrefKey.showMenuBarWeeklyRing: PrefKey.defaultShowMenuBarWeeklyRing,
+            PrefKey.sessionGlyph: true,
+            PrefKey.weeklyGlyph: true,
+            PrefKey.sessionPaceSlow: true,
+            PrefKey.sessionPaceSteady: true,
+            PrefKey.sessionPaceFast: true,
+            PrefKey.weeklyPaceSlow: true,
+            PrefKey.weeklyPaceSteady: true,
+            PrefKey.weeklyPaceFast: true,
         ])
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -70,13 +122,42 @@ final class UsageStore: ObservableObject {
 
     // MARK: Menu bar rendering
 
-    private var menuBarEntries: [(name: String?, percent: Double?)] {
+    private var menuBarEntries: [MenuBarEntry] {
         let visible = accounts.filter(\.showInMenuBar)
         let namesOn = UserDefaults.standard.bool(forKey: PrefKey.showMenuBarNames)
         let showNames = namesOn && visible.count > 1
+        let interval = max(10.0, UserDefaults.standard.double(forKey: PrefKey.refreshInterval))
         return visible.map { account in
-            (showNames ? account.name : nil, usage[account.id]?.snapshot?.fiveHour.percent)
+            let snapshot = usage[account.id]?.snapshot
+            return MenuBarEntry(
+                name: showNames ? account.name : nil,
+                snapshot: snapshot,
+                isStale: Staleness.isStale(lastSuccess: snapshot?.updatedAt, refreshInterval: interval)
+            )
         }
+    }
+
+    private var menuBarConfig: MenuBarConfig {
+        let defaults = UserDefaults.standard
+        var config = MenuBarConfig()
+        config.showMascot = defaults.bool(forKey: PrefKey.showMenuBarMascot)
+        config.sessionRing = defaults.bool(forKey: PrefKey.showMenuBarRing)
+        config.sessionPercent = defaults.bool(forKey: PrefKey.showMenuBarPercent)
+        config.sessionGlyph = defaults.bool(forKey: PrefKey.sessionGlyph)
+        config.sessionPace = PaceSelection(
+            slow: defaults.bool(forKey: PrefKey.sessionPaceSlow),
+            steady: defaults.bool(forKey: PrefKey.sessionPaceSteady),
+            fast: defaults.bool(forKey: PrefKey.sessionPaceFast)
+        )
+        config.weeklyRing = defaults.bool(forKey: PrefKey.showMenuBarWeeklyRing)
+        config.weeklyPercent = defaults.bool(forKey: PrefKey.showMenuBarWeekly)
+        config.weeklyGlyph = defaults.bool(forKey: PrefKey.weeklyGlyph)
+        config.weeklyPace = PaceSelection(
+            slow: defaults.bool(forKey: PrefKey.weeklyPaceSlow),
+            steady: defaults.bool(forKey: PrefKey.weeklyPaceSteady),
+            fast: defaults.bool(forKey: PrefKey.weeklyPaceFast)
+        )
+        return config
     }
 
     private func advanceWalk(dt: Double) {
@@ -85,7 +166,7 @@ final class UsageStore: ObservableObject {
         let activity = min(1, max(0, (visiblePercents.max() ?? 0) / 100))
         let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
         walkPhase = (walkPhase + cyclesPerSecond * dt).truncatingRemainder(dividingBy: 1)
-        iconImage = ClawdIcon.menuBarImage(entries: menuBarEntries, phase: walkPhase, height: 20)
+        iconImage = ClawdIcon.menuBarImage(entries: menuBarEntries, phase: walkPhase, height: 20, config: menuBarConfig)
     }
 
     // MARK: Refresh

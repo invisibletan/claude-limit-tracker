@@ -7,6 +7,19 @@ struct PreferencesView: View {
 
     @AppStorage(PrefKey.refreshInterval) private var refreshInterval = PrefKey.defaultRefreshInterval
     @AppStorage(PrefKey.showMenuBarNames) private var showMenuBarNames = PrefKey.defaultShowMenuBarNames
+    @AppStorage(PrefKey.showMenuBarWeekly) private var showMenuBarWeekly = PrefKey.defaultShowMenuBarWeekly
+    @AppStorage(PrefKey.showMenuBarMascot) private var showMenuBarMascot = PrefKey.defaultShowMenuBarMascot
+    @AppStorage(PrefKey.showMenuBarRing) private var showMenuBarRing = PrefKey.defaultShowMenuBarRing
+    @AppStorage(PrefKey.showMenuBarPercent) private var showMenuBarPercent = PrefKey.defaultShowMenuBarPercent
+    @AppStorage(PrefKey.showMenuBarWeeklyRing) private var showMenuBarWeeklyRing = PrefKey.defaultShowMenuBarWeeklyRing
+    @AppStorage(PrefKey.sessionGlyph) private var sessionGlyph = true
+    @AppStorage(PrefKey.weeklyGlyph) private var weeklyGlyph = true
+    @AppStorage(PrefKey.sessionPaceSlow) private var sessionPaceSlow = true
+    @AppStorage(PrefKey.sessionPaceSteady) private var sessionPaceSteady = true
+    @AppStorage(PrefKey.sessionPaceFast) private var sessionPaceFast = true
+    @AppStorage(PrefKey.weeklyPaceSlow) private var weeklyPaceSlow = true
+    @AppStorage(PrefKey.weeklyPaceSteady) private var weeklyPaceSteady = true
+    @AppStorage(PrefKey.weeklyPaceFast) private var weeklyPaceFast = true
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -73,6 +86,52 @@ struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("Menu bar") {
+                    Toggle("Clawd mascot", isOn: $showMenuBarMascot)
+                    Toggle("Account names", isOn: $showMenuBarNames)
+                }
+
+                Section("Session (5-hour) on menu bar") {
+                    LabeledContent("Elements") {
+                        HStack(spacing: 10) {
+                            Toggle("Ring", isOn: $showMenuBarRing)
+                            Toggle("Percent", isOn: $showMenuBarPercent)
+                            Toggle("Glyph", isOn: $sessionGlyph)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    LabeledContent("Visible when pace is") {
+                        HStack(spacing: 10) {
+                            Toggle("🐢 Slow", isOn: $sessionPaceSlow)
+                            Toggle("= Steady", isOn: $sessionPaceSteady)
+                            Toggle("🔥 Fast", isOn: $sessionPaceFast)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                }
+
+                Section("Weekly (W:) on menu bar") {
+                    LabeledContent("Elements") {
+                        HStack(spacing: 10) {
+                            Toggle("Ring", isOn: $showMenuBarWeeklyRing)
+                            Toggle("Percent", isOn: $showMenuBarWeekly)
+                            Toggle("Glyph", isOn: $weeklyGlyph)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    LabeledContent("Visible when pace is") {
+                        HStack(spacing: 10) {
+                            Toggle("🐢 Slow", isOn: $weeklyPaceSlow)
+                            Toggle("= Steady", isOn: $weeklyPaceSteady)
+                            Toggle("🔥 Fast", isOn: $weeklyPaceFast)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    Text("Elements pick what renders (glyphs are monochrome flame / equals / tortoise; % turns red past 80%). \"Visible when pace is\" filters the whole group — while a window's pace is an unchecked state, that account's group is hidden; fresh windows with unknown pace always show. The item never goes empty: if every group is hidden the mascot appears; with the mascot hidden and all rings + percents off, the session ring returns; with no accounts the mascot always shows.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Behavior") {
                     HStack {
                         Text("Refresh every")
@@ -83,7 +142,6 @@ struct PreferencesView: View {
                         Text("seconds")
                         Spacer()
                     }
-                    Toggle("Show account names on menu bar", isOn: $showMenuBarNames)
                     Toggle("Launch at login", isOn: $launchAtLogin)
                         .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                     if let launchError {
