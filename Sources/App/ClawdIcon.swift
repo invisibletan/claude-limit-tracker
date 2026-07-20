@@ -23,65 +23,221 @@ enum ClawdIcon {
     }
 
     /// One composited image for the whole menu bar label — Clawd on the left,
-    /// then one `[name] ring NN%` segment per visible account. Everything is a
-    /// single image because `MenuBarExtra` labels drop all but the first image.
-    /// `name` is nil for a single account (matches the original look).
-    static func menuBarImage(entries: [(name: String?, percent: Double?)], phase: Double, height: CGFloat) -> NSImage {
-        let items = entries.isEmpty ? [(name: Optional<String>.none, percent: Optional<Double>.none)] : entries
-        let clawdWidth = height * CGFloat(gridW / gridH)
+    /// then one segment per visible account composed from the config's
+    /// elements: `[name] [session: ring % glyph] [W: ring % glyph]`. Pace
+    /// glyphs are monochrome SF Symbols (flame / equal / tortoise) tinted with
+    /// the resolved label color — or, in `.ringTint` style, each window's ring
+    /// stroke encodes its own pace tier. Percent text turns alarm red at the
+    /// severity threshold; a stale account's whole segment draws dimmed.
+    /// Everything is a single image because `MenuBarExtra` labels drop all but
+    /// the first image. `name` is nil for a single account.
+    static func menuBarImage(entries: [MenuBarEntry], phase: Double, height: CGFloat, config: MenuBarConfig) -> NSImage {
+        let hasEntries = !entries.isEmpty
+        let items = hasEntries ? entries : [MenuBarEntry(name: nil, snapshot: nil)]
+        let mascotPreferred = MenuBarLayout.showsMascot(preference: config.showMascot, hasEntries: hasEntries)
+        let cfg = MenuBarLayout.effective(config, mascotVisible: mascotPreferred)
         let ringSize = height * 0.82
         let gapMascot = height * 0.28
         let gapEntry = height * 0.44
         let gapNameRing = height * 0.16
         let gapRingPct = height * 0.12
+        let gapPctGlyph = height * 0.10
+        let gapWeekly = height * 0.30
 
         let font = NSFont.monospacedDigitSystemFont(ofSize: height * 0.62, weight: .semibold)
-        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+        // Resolve the dynamic label colors ONCE against the app's effective
+        // appearance. The status item composites this image under the menu
+        // bar's *vibrant* appearance, where `labelColor` resolves to a
+        // vibrancy-oriented white/grey meant for template blending — drawn as
+        // plain color it washes out to ghost text. Concrete colors (black in
+        // light mode, white in dark) sidestep that; the 15fps redraw picks up
+        // appearance switches.
+        let textColor = resolvedLabelColor(.labelColor)
+        let secondaryColor = resolvedLabelColor(.secondaryLabelColor)
+        func pctAttrs(_ percent: Double?) -> [NSAttributedString.Key: Any] {
+            let color = (percent ?? 0) >= Palette.redThreshold ? Palette.alarmRedNS : textColor
+            return [.font: font, .foregroundColor: color]
+        }
+        let nameAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
+        let weeklyLabelAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: secondaryColor]
 
         func nameString(_ name: String?) -> NSAttributedString? {
             guard let name, !name.isEmpty else { return nil }
             let trimmed = name.count > 8 ? String(name.prefix(8)) : name
-            return NSAttributedString(string: trimmed, attributes: attrs)
+            return NSAttributedString(string: trimmed, attributes: nameAttrs)
+        }
+        // The glyph is an element of its group (set 1: Ring/Percent/Glyph);
+        // it shows when its element checkbox is on, the group is visible, and
+        // the pace is known. The state checkboxes (set 2) gate the GROUP.
+        func glyphImage(_ state: Pace.State?, enabled: Bool) -> NSImage? {
+            guard enabled, let state else { return nil }
+            return paceSymbol(state, height: height, tint: textColor)
         }
 
-        var segments: [(name: NSAttributedString?, pct: NSAttributedString, percent: Double?, width: CGFloat)] = []
-        for item in items {
-            let name = nameString(item.name)
-            let pct = NSAttributedString(string: Format.percent(item.percent), attributes: attrs)
-            var width = ringSize + gapRingPct + ceil(pct.size().width)
-            if let name { width += ceil(name.size().width) + gapNameRing }
-            segments.append((name, pct, item.percent, width))
+        // Each segment is a flat token stream — one pass computes width, one draws.
+        enum Token {
+            case gap(CGFloat)
+            case text(NSAttributedString)
+            case image(NSImage)
+            case ring(percent: Double?, color: NSColor)
         }
+        func width(of token: Token) -> CGFloat {
+            switch token {
+            case .gap(let g): return g
+            case .text(let t): return ceil(t.size().width)
+            case .image(let i): return ceil(i.size.width)
+            case .ring: return ringSize
+            }
+        }
+
+        var segments: [(tokens: [Token], isStale: Bool, width: CGFloat)] = []
+        for item in items {
+            var tokens: [Token] = []
+            if let name = nameString(item.name) { tokens += [.text(name), .gap(gapNameRing)] }
+
+            // Session group: ring, percent, pace glyph — rendered only while
+            // the window's current pace is a checked state (or still unknown).
+            var session: [Token] = []
+            if cfg.sessionPace.showsGroup(for: item.sessionPace) {
+                if cfg.sessionRing {
+                    session.append(.ring(percent: item.sessionPercent, color: Palette.nsColor(forPercent: item.sessionPercent)))
+                }
+                if cfg.sessionPercent {
+                    if cfg.sessionRing { session.append(.gap(gapRingPct)) }
+                    session.append(.text(NSAttributedString(string: Format.percent(item.sessionPercent), attributes: pctAttrs(item.sessionPercent))))
+                }
+                if let glyph = glyphImage(item.sessionPace, enabled: cfg.sessionGlyph) {
+                    if !session.isEmpty { session.append(.gap(gapPctGlyph)) }
+                    session.append(.image(glyph))
+                }
+            }
+            tokens += session
+
+            // Weekly group: the "W:" label anchors the structural elements
+            // (ring/percent); a glyph-only weekly stays bare, trailing the
+            // session group like a second pace column.
+            var weekly: [Token] = []
+            if cfg.weeklyPace.showsGroup(for: item.weeklyPace) {
+                if cfg.weeklyRing || cfg.weeklyPercent {
+                    weekly.append(.text(NSAttributedString(string: "W:", attributes: weeklyLabelAttrs)))
+                    if cfg.weeklyRing {
+                        weekly.append(.ring(percent: item.weeklyPercent, color: Palette.nsColor(forPercent: item.weeklyPercent)))
+                    }
+                    if cfg.weeklyPercent {
+                        if cfg.weeklyRing { weekly.append(.gap(gapRingPct)) }
+                        weekly.append(.text(NSAttributedString(string: Format.percent(item.weeklyPercent), attributes: pctAttrs(item.weeklyPercent))))
+                    }
+                }
+                if let glyph = glyphImage(item.weeklyPace, enabled: cfg.weeklyGlyph) {
+                    if !weekly.isEmpty { weekly.append(.gap(gapPctGlyph)) }
+                    weekly.append(.image(glyph))
+                }
+            }
+            if !weekly.isEmpty {
+                if !tokens.isEmpty {
+                    let bareGlyphOnly = !(cfg.weeklyRing || cfg.weeklyPercent)
+                    tokens.append(.gap(bareGlyphOnly ? gapPctGlyph : gapWeekly))
+                }
+                tokens += weekly
+            }
+
+            // An account whose groups are all hidden (pace filter) disappears
+            // entirely — a bare name with no data is noise, and dropping it
+            // lets the mascot fallback fire when every account is filtered.
+            guard !(session.isEmpty && weekly.isEmpty) else { continue }
+            // Trim trailing gaps (defensive; group content follows the name).
+            while case .some(.gap) = tokens.last { tokens.removeLast() }
+            guard !tokens.isEmpty else { continue }
+
+            segments.append((tokens, item.isStale, tokens.reduce(0) { $0 + width(of: $1) }))
+        }
+
+        // Group visibility is data-dependent, so the never-empty guarantee gets
+        // a dynamic leg: when every segment is currently hidden, the mascot
+        // shows regardless of its preference — the item must stay clickable.
+        let mascotVisible = mascotPreferred || segments.isEmpty
+        let clawdWidth = mascotVisible ? height * CGFloat(gridW / gridH) : 0
 
         var total = clawdWidth
         for (i, seg) in segments.enumerated() { total += (i == 0 ? gapMascot : gapEntry) + seg.width }
 
         return NSImage(size: NSSize(width: total, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
+            if mascotVisible {
+                drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
+            }
+
             var x = clawdWidth
             for (i, seg) in segments.enumerated() {
                 x += (i == 0 ? gapMascot : gapEntry)
-                if let name = seg.name {
-                    let sz = name.size()
-                    name.draw(at: NSPoint(x: x, y: (height - sz.height) / 2))
-                    x += ceil(sz.width) + gapNameRing
+
+                // Stale data draws the whole segment dimmed (state via opacity,
+                // not hue — the Bjango idiom), leaving severity colors intact.
+                if seg.isStale {
+                    ctx.saveGState()
+                    ctx.setAlpha(0.45)
+                    ctx.beginTransparencyLayer(auxiliaryInfo: nil)
                 }
-                drawRing(
-                    ctx: ctx,
-                    rect: CGRect(x: x, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
-                    size: ringSize, percent: seg.percent
-                )
-                x += ringSize + gapRingPct
-                let psz = seg.pct.size()
-                seg.pct.draw(at: NSPoint(x: x, y: (height - psz.height) / 2))
-                x += ceil(psz.width)
+
+                for token in seg.tokens {
+                    switch token {
+                    case .gap(let g):
+                        x += g
+                    case .text(let t):
+                        let sz = t.size()
+                        t.draw(at: NSPoint(x: x, y: (height - sz.height) / 2))
+                        x += ceil(sz.width)
+                    case .image(let image):
+                        let sz = image.size
+                        image.draw(in: CGRect(x: x, y: (height - sz.height) / 2, width: sz.width, height: sz.height))
+                        x += ceil(sz.width)
+                    case .ring(let percent, let color):
+                        drawRing(
+                            ctx: ctx,
+                            rect: CGRect(x: x, y: (height - ringSize) / 2, width: ringSize, height: ringSize),
+                            size: ringSize, percent: percent, color: color
+                        )
+                        x += ringSize
+                    }
+                }
+
+                if seg.isStale {
+                    ctx.endTransparencyLayer()
+                    ctx.restoreGState()
+                }
             }
             return true
         }
     }
 
-    private static func drawRing(ctx: CGContext, rect: CGRect, size: CGFloat, percent: Double?) {
+    /// A dynamic system color snapshotted as a concrete color under the app's
+    /// effective appearance, immune to the menu bar's vibrant drawing context.
+    private static func resolvedLabelColor(_ color: NSColor) -> NSColor {
+        var resolved = color
+        NSApplication.shared.effectiveAppearance.performAsCurrentDrawingAppearance {
+            resolved = NSColor(cgColor: color.cgColor) ?? color
+        }
+        return resolved
+    }
+
+    /// Monochrome pace glyph: the SF Symbol for the state, tinted with the
+    /// (pre-resolved) label color so it matches the menu bar's text in both
+    /// light and dark appearance (unlike color emoji, which render fixed-color).
+    private static func paceSymbol(_ state: Pace.State, height: CGFloat, tint: NSColor) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: height * 0.52, weight: .semibold)
+        guard let base = NSImage(
+            systemSymbolName: PaceDisplay.symbolName(for: state),
+            accessibilityDescription: Format.paceLabel(Pace(ratio: 1, state: state, projectedPercent: 0, timeToLimit: nil))
+        )?.withSymbolConfiguration(config) else { return nil }
+        return NSImage(size: base.size, flipped: false) { rect in
+            base.draw(in: rect)
+            tint.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+    }
+
+    private static func drawRing(ctx: CGContext, rect: CGRect, size: CGFloat, percent: Double?, color: NSColor) {
         let lineWidth = size * 0.16
         let circleRect = rect.insetBy(dx: lineWidth / 2 + 0.5, dy: lineWidth / 2 + 0.5)
         ctx.setLineWidth(lineWidth)
@@ -100,7 +256,7 @@ enum ClawdIcon {
                 endAngle: .pi / 2 - 2 * .pi * CGFloat(fraction),
                 clockwise: true
             )
-            Palette.nsColor(forPercent: percent).setStroke()
+            color.setStroke()
             ctx.strokePath()
         }
     }

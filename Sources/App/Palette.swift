@@ -1,4 +1,5 @@
 import SwiftUI
+import UsageCore
 
 /// Single source of truth for the usage colors: orange normally, red once usage
 /// passes the threshold. Used by both the menu bar ring and the panel meters.
@@ -20,5 +21,11 @@ enum Palette {
     static func nsColor(forPercent percent: Double?) -> NSColor {
         let c = rgb(forPercent: percent)
         return NSColor(srgbRed: c.r, green: c.g, blue: c.b, alpha: 1)
+    }
+
+    /// Fixed alarm red for percent readouts past the threshold (redundant
+    /// severity encoding next to rings).
+    static var alarmRedNS: NSColor {
+        NSColor(srgbRed: redRGB.r, green: redRGB.g, blue: redRGB.b, alpha: 1)
     }
 }

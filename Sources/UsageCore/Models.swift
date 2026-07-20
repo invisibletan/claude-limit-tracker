@@ -16,6 +16,27 @@ public struct Meter: Sendable {
     }
 }
 
+/// What the menu bar shows for one account: name (optional), session (5-hour)
+/// percent + pace, and weekly percent + pace.
+public struct MenuBarEntry: Sendable, Equatable {
+    public var name: String?
+    public var sessionPercent: Double?
+    public var sessionPace: Pace.State?
+    public var weeklyPercent: Double?
+    public var weeklyPace: Pace.State?
+    /// Last successful fetch is too old — the segment renders dimmed.
+    public var isStale: Bool
+
+    public init(name: String?, snapshot: UsageSnapshot?, isStale: Bool = false) {
+        self.name = name
+        self.sessionPercent = snapshot?.fiveHour.percent
+        self.sessionPace = snapshot?.fiveHour.pace?.state
+        self.weeklyPercent = snapshot?.weekly.percent
+        self.weeklyPace = snapshot?.weekly.pace?.state
+        self.isStale = isStale
+    }
+}
+
 /// The full state rendered by the menu bar UI.
 public struct UsageSnapshot: Sendable {
     public var fiveHour: Meter
