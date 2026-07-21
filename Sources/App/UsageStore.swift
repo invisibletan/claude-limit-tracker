@@ -29,6 +29,12 @@ enum PrefKey {
     static let weeklyPaceSlow = "showMenuBarWeeklyPaceSlow"
     static let weeklyPaceSteady = "showMenuBarWeeklyPaceSteady"
     static let weeklyPaceFast = "showMenuBarWeeklyPaceFast"
+    static let fableRing = "showMenuBarFableRing"
+    static let fablePercent = "showMenuBarFablePercent"
+    static let fableGlyph = "showMenuBarFableGlyph"
+    static let fablePaceSlow = "showMenuBarFablePaceSlow"
+    static let fablePaceSteady = "showMenuBarFablePaceSteady"
+    static let fablePaceFast = "showMenuBarFablePaceFast"
 }
 
 /// Fetched usage for one account.
@@ -87,6 +93,12 @@ final class UsageStore: ObservableObject {
             PrefKey.weeklyPaceSlow: true,
             PrefKey.weeklyPaceSteady: true,
             PrefKey.weeklyPaceFast: true,
+            PrefKey.fableRing: false,
+            PrefKey.fablePercent: true,
+            PrefKey.fableGlyph: true,
+            PrefKey.fablePaceSlow: true,
+            PrefKey.fablePaceSteady: true,
+            PrefKey.fablePaceFast: true,
         ])
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -156,6 +168,14 @@ final class UsageStore: ObservableObject {
             slow: defaults.bool(forKey: PrefKey.weeklyPaceSlow),
             steady: defaults.bool(forKey: PrefKey.weeklyPaceSteady),
             fast: defaults.bool(forKey: PrefKey.weeklyPaceFast)
+        )
+        config.fableRing = defaults.bool(forKey: PrefKey.fableRing)
+        config.fablePercent = defaults.bool(forKey: PrefKey.fablePercent)
+        config.fableGlyph = defaults.bool(forKey: PrefKey.fableGlyph)
+        config.fablePace = PaceSelection(
+            slow: defaults.bool(forKey: PrefKey.fablePaceSlow),
+            steady: defaults.bool(forKey: PrefKey.fablePaceSteady),
+            fast: defaults.bool(forKey: PrefKey.fablePaceFast)
         )
         return config
     }

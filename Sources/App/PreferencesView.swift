@@ -20,6 +20,12 @@ struct PreferencesView: View {
     @AppStorage(PrefKey.weeklyPaceSlow) private var weeklyPaceSlow = true
     @AppStorage(PrefKey.weeklyPaceSteady) private var weeklyPaceSteady = true
     @AppStorage(PrefKey.weeklyPaceFast) private var weeklyPaceFast = true
+    @AppStorage(PrefKey.fableRing) private var fableRing = false
+    @AppStorage(PrefKey.fablePercent) private var fablePercent = true
+    @AppStorage(PrefKey.fableGlyph) private var fableGlyph = true
+    @AppStorage(PrefKey.fablePaceSlow) private var fablePaceSlow = true
+    @AppStorage(PrefKey.fablePaceSteady) private var fablePaceSteady = true
+    @AppStorage(PrefKey.fablePaceFast) private var fablePaceFast = true
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -128,6 +134,28 @@ struct PreferencesView: View {
                         .toggleStyle(.checkbox)
                     }
                     Text("Elements pick what renders (glyphs are monochrome flame / equals / tortoise; % turns red past 80%). \"Visible when pace is\" filters the whole group — while a window's pace is an unchecked state, that account's group is hidden; fresh windows with unknown pace always show. The item never goes empty: if every group is hidden the mascot appears; with the mascot hidden and all rings + percents off, the session ring returns; with no accounts the mascot always shows.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Current week (Fable) (F:) on menu bar") {
+                    LabeledContent("Elements") {
+                        HStack(spacing: 10) {
+                            Toggle("Ring", isOn: $fableRing)
+                            Toggle("Percent", isOn: $fablePercent)
+                            Toggle("Glyph", isOn: $fableGlyph)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    LabeledContent("Visible when pace is") {
+                        HStack(spacing: 10) {
+                            Toggle("🐢 Slow", isOn: $fablePaceSlow)
+                            Toggle("= Steady", isOn: $fablePaceSteady)
+                            Toggle("🔥 Fast", isOn: $fablePaceFast)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
+                    Text("The Fable-model weekly window (claude.ai's \"Current week (Fable)\"). Read from the same rate-limit headers via a 1-token Fable probe; if that probe can't run (plan without Fable, capacity), the app falls back to a Haiku probe and this group hides until the window is visible again.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

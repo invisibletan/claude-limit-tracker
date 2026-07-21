@@ -79,6 +79,11 @@ public struct MenuBarConfig: Sendable, Equatable {
     public var weeklyPercent = true
     public var weeklyGlyph = true
     public var weeklyPace = PaceSelection.all
+    /// "Current week (Fable)" group — same composable elements as weekly.
+    public var fableRing = false
+    public var fablePercent = true
+    public var fableGlyph = true
+    public var fablePace = PaceSelection.all
 
     public init() {}
 }
@@ -93,7 +98,9 @@ public enum MenuBarLayout {
     /// as anchors because they're data-dependent (absent early in a window).
     public static func effective(_ config: MenuBarConfig, mascotVisible: Bool) -> MenuBarConfig {
         var out = config
-        let anyStructural = config.sessionRing || config.sessionPercent || config.weeklyRing || config.weeklyPercent
+        let anyStructural = config.sessionRing || config.sessionPercent
+            || config.weeklyRing || config.weeklyPercent
+            || config.fableRing || config.fablePercent
         if !mascotVisible && !anyStructural { out.sessionRing = true }
         return out
     }

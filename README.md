@@ -1,6 +1,6 @@
 # 🐾 Claude Usage Tracker
 
-> Keep your Claude **5-hour** and **weekly** usage limits one glance away — right in your macOS menu bar.
+> Keep your Claude **5-hour**, **weekly**, and **Current week (Fable)** usage limits one glance away — right in your macOS menu bar.
 
 ![macOS](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
@@ -26,7 +26,7 @@ A tiny, native macOS menu bar app. An animated pixel **Clawd** 🐾 walks across
 - 🎛️ **Composable menu bar, per window** — each of the 5-hour and weekly windows gets two checkbox sets: **Elements** (Ring · Percent · Glyph) picks what renders, **Visible when pace is** (🐢 = 🔥) hides an account's whole group while its pace is an unchecked state — e.g. 🔥-only turns the bar into an attention-only display that stays silent until something burns.
 - 🧷 **Never-empty item** — hide everything and the mascot steps in; hide the mascot too and the ring returns. The menu bar item always stays clickable.
 - 🌫️ **Staleness dimming** — if an account hasn't refreshed successfully for ~10 minutes, its whole segment fades so you know the numbers are old.
-- 📊 **Both limits at a glance** — 5-hour and weekly meters per account in a click-through panel; optional weekly ring on the bar.
+- 📊 **All three limits at a glance** — 5-hour, weekly, and Current week (Fable) meters per account in a click-through panel; optional weekly and Fable rings on the bar.
 - 🎯 **Exact numbers** — the same figures as *claude.ai → Settings → Usage*, not an estimate.
 - 🪶 **Featherweight** — one small binary, no dependencies, no background bloat.
 - 🔒 **Private by design** — tokens stay on your Mac (a `0600` file, never the Keychain).
@@ -69,13 +69,14 @@ For each account, every refresh fires **one tiny (~1-token) `POST /v1/messages`*
 | --- | --- |
 | `anthropic-ratelimit-unified-5h-utilization` | 5-hour usage (`0`–`1`) |
 | `anthropic-ratelimit-unified-5h-reset` | when the 5-hour window resets |
-| `anthropic-ratelimit-unified-7d-*` | the weekly equivalents |
+| `anthropic-ratelimit-unified-7d-*` | the weekly (all-models) equivalents |
+| `anthropic-ratelimit-unified-7d_oi-*` | the **Current week (Fable)** equivalents |
 
 That's the same data behind *claude.ai → Settings → Usage*. The `user:inference` token from `claude setup-token` is all it needs — **no Keychain, no `user:profile` scope, no browser login.**
 
 The **pace** is derived locally: it compares how much you've used against how far you are into the window (a 5-hour window fills evenly at 20%/hour), so you know if you'll run out early.
 
-> ℹ️ These headers expose only the **5-hour** and **weekly (all-models)** windows. Per-model limits (e.g. a Fable-only weekly) aren't available from this source.
+> ℹ️ The headers are **model-conditional**: the `7d_oi` (Current week (Fable)) window only comes back on a call to the **Fable model**, so the probe targets `claude-fable-5` — with the Claude Code system prompt an OAuth token needs on premium models. If that probe can't run (a plan without Fable, a capacity `429`), the app falls back to a 1-token **Haiku** probe: the 5-hour and weekly meters stay live and the Fable group hides until the window is visible again.
 
 *Technique credit: [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter).*
 
@@ -83,10 +84,10 @@ The **pace** is derived locally: it compares how much you've used against how fa
 
 ## 🖥️ In the menu bar
 
-Per shown account: `name  ring NN% <pace>  W:MM% <pace>` — every piece optional (see Preferences).
+Per shown account: `name  ring NN% <pace>  W:MM% <pace>  F:KK% <pace>` — every piece optional (see Preferences).
 
 - 🐾 **Clawd** strolls along — pace scales with your usage.
-- ⭕ The **ring** and first **%** are the 5-hour window; **`W:`** is the weekly window.
+- ⭕ The **ring** and first **%** are the 5-hour window; **`W:`** is the weekly window; **`F:`** is Current week (Fable) — hidden while it's unknown (Haiku fallback).
 - 🔥 The **pace glyph** (flame / equals / tortoise, monochrome) shows each window's burn pace vs an even burn; hidden while a window is too fresh to judge.
 - 🟠 → 🔴 Ring and % turn **red at 80%**, so you notice before you hit the wall.
 - 🌫️ A segment **fades** when its data is stale (no successful refresh in ~10 min).
@@ -112,12 +113,14 @@ Per shown account: `name  ring NN% <pace>  W:MM% <pace>` — every piece optiona
 | **Clawd mascot** | Show or hide Clawd (he still appears if everything else is hidden — the item never goes empty). |
 | **Account names** | Label each account's segment with its name. |
 
-**Session (5-hour) on menu bar** · **Weekly (W:) on menu bar** — one section each, with two rows:
+**Session (5-hour) on menu bar** · **Weekly (W:) on menu bar** · **Current week (Fable) (F:) on menu bar** — one section each, with two rows:
 
 | Row | Checkboxes | What it does |
 | --- | --- | --- |
 | **Elements** | Ring · Percent · Glyph | Which pieces of that window's group render. |
 | **Visible when pace is** | 🐢 Slow · = Steady · 🔥 Fast | Filters the **whole group** by current pace — while a window's pace is an unchecked state, that account's group is hidden until the pace changes (unknown pace always shows). |
+
+> The **Current week (Fable)** group additionally hides whenever the Fable window is unknown (Haiku fallback in effect), so it never shows an empty placeholder.
 
 **Behavior**
 
@@ -143,7 +146,7 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 
 - `Sources/UsageCore/` — the testable data core: fetch + parse rate-limit headers, build snapshots, compute pace, formatting, plus the menu bar composition model (`MenuBarConfig`, `PaceSelection`, never-empty guards, staleness rule, legacy-pref migration).
 - `Sources/App/` — the SwiftUI app: `MenuBarExtra`, Clawd mascot + token-stream segment drawing, panel, preferences, per-account store.
-- `Tests/UsageCoreTests/` — header-parsing, snapshot, pace, menu-bar-layout, and migration tests (40 tests).
+- `Tests/UsageCoreTests/` — header-parsing (incl. the Fable `7d_oi` window + probe shape), snapshot, pace, menu-bar-layout, and migration tests (48 tests).
 
 > 🧪 `test.sh` adds flags so `swift-testing` links under **Command Line Tools only** (no full Xcode needed). With full Xcode, plain `swift test` works too.
 

@@ -45,6 +45,9 @@ struct PanelView: View {
             if let snapshot = entry?.snapshot {
                 MeterView(title: "5-hour limit", meter: snapshot.fiveHour)
                 MeterView(title: "Weekly limit", meter: snapshot.weekly)
+                if let fable = snapshot.fableWeekly {
+                    MeterView(title: "Current week (Fable)", meter: fable)
+                }
             } else if let error = entry?.error {
                 Text(error).font(.caption).foregroundStyle(.red)
             } else {

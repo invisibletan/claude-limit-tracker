@@ -3,7 +3,10 @@ import Testing
 @testable import UsageCore
 
 @Suite struct MenuBarEntryTests {
-    private func snapshot(session: Double?, sessionState: Pace.State?, weekly: Double?, weeklyState: Pace.State?) -> UsageSnapshot {
+    private func snapshot(
+        session: Double?, sessionState: Pace.State?, weekly: Double?, weeklyState: Pace.State?,
+        fable: Double? = nil, fableState: Pace.State? = nil
+    ) -> UsageSnapshot {
         func pace(_ state: Pace.State?) -> Pace? {
             guard let state else { return nil }
             return Pace(ratio: 1, state: state, projectedPercent: 50, timeToLimit: nil)
@@ -11,17 +14,22 @@ import Testing
         return UsageSnapshot(
             fiveHour: Meter(percent: session, resetText: "", pace: pace(sessionState)),
             weekly: Meter(percent: weekly, resetText: "", pace: pace(weeklyState)),
+            fableWeekly: fable.map { Meter(percent: $0, resetText: "", pace: pace(fableState)) },
             updatedAt: Date()
         )
     }
 
     @Test func mapsSnapshotFields() {
-        let entry = MenuBarEntry(name: "work", snapshot: snapshot(session: 42, sessionState: .fast, weekly: 12, weeklyState: .slow))
+        let entry = MenuBarEntry(name: "work", snapshot: snapshot(
+            session: 42, sessionState: .fast, weekly: 12, weeklyState: .slow,
+            fable: 78, fableState: .steady))
         #expect(entry.name == "work")
         #expect(entry.sessionPercent == 42)
         #expect(entry.sessionPace == .fast)
         #expect(entry.weeklyPercent == 12)
         #expect(entry.weeklyPace == .slow)
+        #expect(entry.fableWeeklyPercent == 78)
+        #expect(entry.fableWeeklyPace == .steady)
     }
 
     @Test func missingSnapshotYieldsEmptyEntry() {
@@ -31,6 +39,15 @@ import Testing
         #expect(entry.sessionPace == nil)
         #expect(entry.weeklyPercent == nil)
         #expect(entry.weeklyPace == nil)
+        #expect(entry.fableWeeklyPercent == nil)
+        #expect(entry.fableWeeklyPace == nil)
+    }
+
+    @Test func absentFableMeterYieldsNilFields() {
+        // Snapshot built from a fallback probe (no 7d_oi window).
+        let entry = MenuBarEntry(name: "a", snapshot: snapshot(session: 1, sessionState: nil, weekly: 2, weeklyState: nil))
+        #expect(entry.fableWeeklyPercent == nil)
+        #expect(entry.fableWeeklyPace == nil)
     }
 
     @Test func nilPaceStaysNil() {
