@@ -35,6 +35,8 @@ enum PrefKey {
     static let fablePaceSlow = "showMenuBarFablePaceSlow"
     static let fablePaceSteady = "showMenuBarFablePaceSteady"
     static let fablePaceFast = "showMenuBarFablePaceFast"
+    static let notifyPaceFast = "notifyPaceFast"
+    static let defaultNotifyPaceFast = true
 }
 
 /// Fetched usage for one account.
@@ -54,6 +56,12 @@ final class UsageStore: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var animationTask: Task<Void, Never>?
     private var walkPhase = 0.0
+
+    /// Last-seen pace state per account per window, for Fast-crossing alerts.
+    /// An account is absent until its first successful refresh (which seeds it
+    /// silently); only later transitions notify.
+    private var paceMemory: [UUID: WindowPaceStates] = [:]
+    private let notifier = PaceNotifier()
 
     var hasAccounts: Bool { !accounts.isEmpty }
 
@@ -99,7 +107,11 @@ final class UsageStore: ObservableObject {
             PrefKey.fablePaceSlow: true,
             PrefKey.fablePaceSteady: true,
             PrefKey.fablePaceFast: true,
+            PrefKey.notifyPaceFast: PrefKey.defaultNotifyPaceFast,
         ])
+        if defaults.bool(forKey: PrefKey.notifyPaceFast) {
+            notifier.requestAuthorization()
+        }
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
@@ -130,6 +142,12 @@ final class UsageStore: ObservableObject {
 
     func persistAccounts() {
         try? AccountStore.save(accounts)
+    }
+
+    /// Ask macOS for notification permission — called when the user turns the
+    /// Fast-pace alert on in Preferences (and once at launch if already on).
+    func requestNotificationAuthorization() {
+        notifier.requestAuthorization()
     }
 
     // MARK: Menu bar rendering
@@ -226,5 +244,53 @@ final class UsageStore: ObservableObject {
         // Drop usage for removed accounts.
         merged = merged.filter { id, _ in current.contains { $0.id == id } }
         usage = merged
+
+        detectPaceCrossings(results: results, accounts: current)
+    }
+
+    // MARK: Fast-pace notifications
+
+    /// Fire a notification whenever a freshly-fetched window crosses the Fast
+    /// boundary (either way). Errored refreshes carry no new pace, so they're
+    /// skipped — memory (and thus the baseline) only moves on real data.
+    private func detectPaceCrossings(results: [UUID: AccountUsage], accounts current: [Account]) {
+        let enabled = UserDefaults.standard.bool(forKey: PrefKey.notifyPaceFast)
+        let showName = current.count > 1
+        for account in current {
+            guard let snapshot = results[account.id]?.snapshot else { continue }
+            let next = WindowPaceStates(
+                session: snapshot.fiveHour.pace?.state,
+                weekly: snapshot.weekly.pace?.state,
+                fable: snapshot.fableWeekly?.pace?.state
+            )
+            // `crossings` returns nothing when there is no prior baseline, so the
+            // first refresh seeds silently — pre-existing Fast windows never fire.
+            if enabled {
+                let name = showName ? account.name : nil
+                for crossing in PaceAlerts.crossings(from: paceMemory[account.id], to: next) {
+                    notifier.notify(crossing.alert, accountName: name,
+                                    window: label(crossing.window), percent: percent(crossing.window, in: snapshot))
+                }
+            }
+            paceMemory[account.id] = next
+        }
+        // Forget removed accounts so a re-add starts from a clean baseline.
+        paceMemory = paceMemory.filter { id, _ in current.contains { $0.id == id } }
+    }
+
+    private func label(_ window: PaceWindow) -> PaceWindowLabel {
+        switch window {
+        case .session: return .session
+        case .weekly: return .weekly
+        case .fable: return .fable
+        }
+    }
+
+    private func percent(_ window: PaceWindow, in snapshot: UsageSnapshot) -> Double? {
+        switch window {
+        case .session: return snapshot.fiveHour.percent
+        case .weekly: return snapshot.weekly.percent
+        case .fable: return snapshot.fableWeekly?.percent
+        }
     }
 }
