@@ -18,9 +18,9 @@ enum ClawdIcon {
     /// then one segment per visible account composed from the config's
     /// elements: `[name] [session: ring % glyph] [W: ring % glyph] [F: ring % glyph]`. Pace
     /// glyphs are monochrome SF Symbols (flame / equal / tortoise) tinted with
-    /// the resolved label color — or, in `.ringTint` style, each window's ring
-    /// stroke encodes its own pace tier. Percent text turns alarm red at the
-    /// severity threshold; a stale account's whole segment draws dimmed.
+    /// the resolved label color. Each window's ring stroke is colored by its pace
+    /// tier (green slow / amber steady / red fast-or-near-cap); percent text turns
+    /// alarm red in the danger tier; a stale account's whole segment draws dimmed.
     /// Everything is a single image because `MenuBarExtra` labels drop all but
     /// the first image. `name` is nil for a single account.
     static func menuBarImage(entries: [MenuBarEntry], phase: Double, height: CGFloat, config: MenuBarConfig) -> NSImage {
@@ -46,8 +46,8 @@ enum ClawdIcon {
         // appearance switches.
         let textColor = resolvedLabelColor(.labelColor)
         let secondaryColor = resolvedLabelColor(.secondaryLabelColor)
-        func pctAttrs(_ percent: Double?) -> [NSAttributedString.Key: Any] {
-            let color = (percent ?? 0) >= Palette.redThreshold ? Palette.alarmRedNS : textColor
+        func pctAttrs(_ percent: Double?, _ pace: Pace.State?) -> [NSAttributedString.Key: Any] {
+            let color = Palette.isAlarm(pace: pace, percent: percent) ? Palette.alarmRedNS : textColor
             return [.font: font, .foregroundColor: color]
         }
         let nameAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
@@ -92,11 +92,11 @@ enum ClawdIcon {
             var session: [Token] = []
             if cfg.sessionPace.showsGroup(for: item.sessionPace) {
                 if cfg.sessionRing {
-                    session.append(.ring(percent: item.sessionPercent, color: Palette.nsColor(forPercent: item.sessionPercent)))
+                    session.append(.ring(percent: item.sessionPercent, color: Palette.nsColor(pace: item.sessionPace, percent: item.sessionPercent)))
                 }
                 if cfg.sessionPercent {
                     if cfg.sessionRing { session.append(.gap(gapRingPct)) }
-                    session.append(.text(NSAttributedString(string: Format.percent(item.sessionPercent), attributes: pctAttrs(item.sessionPercent))))
+                    session.append(.text(NSAttributedString(string: Format.percent(item.sessionPercent), attributes: pctAttrs(item.sessionPercent, item.sessionPace))))
                 }
                 if let glyph = glyphImage(item.sessionPace, enabled: cfg.sessionGlyph) {
                     if !session.isEmpty { session.append(.gap(gapPctGlyph)) }
@@ -113,11 +113,11 @@ enum ClawdIcon {
                 if cfg.weeklyRing || cfg.weeklyPercent {
                     weekly.append(.text(NSAttributedString(string: "W:", attributes: weeklyLabelAttrs)))
                     if cfg.weeklyRing {
-                        weekly.append(.ring(percent: item.weeklyPercent, color: Palette.nsColor(forPercent: item.weeklyPercent)))
+                        weekly.append(.ring(percent: item.weeklyPercent, color: Palette.nsColor(pace: item.weeklyPace, percent: item.weeklyPercent)))
                     }
                     if cfg.weeklyPercent {
                         if cfg.weeklyRing { weekly.append(.gap(gapRingPct)) }
-                        weekly.append(.text(NSAttributedString(string: Format.percent(item.weeklyPercent), attributes: pctAttrs(item.weeklyPercent))))
+                        weekly.append(.text(NSAttributedString(string: Format.percent(item.weeklyPercent), attributes: pctAttrs(item.weeklyPercent, item.weeklyPace))))
                     }
                 }
                 if let glyph = glyphImage(item.weeklyPace, enabled: cfg.weeklyGlyph) {
@@ -141,11 +141,11 @@ enum ClawdIcon {
                 if cfg.fableRing || cfg.fablePercent {
                     fable.append(.text(NSAttributedString(string: "F:", attributes: weeklyLabelAttrs)))
                     if cfg.fableRing {
-                        fable.append(.ring(percent: item.fableWeeklyPercent, color: Palette.nsColor(forPercent: item.fableWeeklyPercent)))
+                        fable.append(.ring(percent: item.fableWeeklyPercent, color: Palette.nsColor(pace: item.fableWeeklyPace, percent: item.fableWeeklyPercent)))
                     }
                     if cfg.fablePercent {
                         if cfg.fableRing { fable.append(.gap(gapRingPct)) }
-                        fable.append(.text(NSAttributedString(string: Format.percent(item.fableWeeklyPercent), attributes: pctAttrs(item.fableWeeklyPercent))))
+                        fable.append(.text(NSAttributedString(string: Format.percent(item.fableWeeklyPercent), attributes: pctAttrs(item.fableWeeklyPercent, item.fableWeeklyPace))))
                     }
                 }
                 if let glyph = glyphImage(item.fableWeeklyPace, enabled: cfg.fableGlyph) {

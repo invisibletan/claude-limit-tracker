@@ -20,7 +20,7 @@ A tiny, native macOS menu bar app. An animated pixel **Clawd** 🐾 walks across
 ## ✨ Features
 
 - 🐾 **Animated Clawd mascot** — walks faster the harder you're using Claude.
-- ⭕ **Usage ring** — fills with your 5-hour usage; **orange** normally, **red** past 80% (the % text turns red too).
+- ⭕ **Usage ring, colored by pace** — the ring fills with your usage and is **tinted by burn pace, not raw percent**: 🟢 green when slow, 🟡 amber when steady, 🔴 red when fast — so a fast burn warns you *before* you're near the cap. Any window at **≥80%** goes red regardless of pace (the % text turns red too).
 - 👥 **Multiple accounts** — track up to **10** Claude accounts side by side; show or hide each one on the menu bar.
 - 🔥 **Pace signal** — whether each window is burning **fast**, **steady**, or **slow**: monochrome flame / equals / tortoise glyphs right in the menu bar (they adapt to light/dark like system items), 🔥/😎/🐢 emoji with an estimated time-to-limit in the panel.
 - 🎛️ **Composable menu bar, per window** — each of the 5-hour and weekly windows gets two checkbox sets: **Elements** (Ring · Percent · Glyph) picks what renders, **Visible when pace is** (🐢 = 🔥) hides an account's whole group while its pace is an unchecked state — e.g. 🔥-only turns the bar into an attention-only display that stays silent until something burns.
@@ -75,7 +75,7 @@ For each account, every refresh fires **one tiny (~1-token) `POST /v1/messages`*
 
 That's the same data behind *claude.ai → Settings → Usage*. The `user:inference` token from `claude setup-token` is all it needs — **no Keychain, no `user:profile` scope, no browser login.**
 
-The **pace** is derived locally: it compares how much you've used against how far you are into the window (a 5-hour window fills evenly at 20%/hour), so you know if you'll run out early.
+The **pace** is derived locally: it compares how much you've used against how far you are into the window (a 5-hour window fills evenly at 20%/hour), so you know if you'll run out early. The thresholds are deliberately early-warning — **fast** ≈ 5% ahead of an even burn, **slow** ≈ 30% behind — and the ring/bar/% color follows this tier (with a **≥80%** near-cap override that forces red) so the leading indicator, not just the level, is what you see.
 
 > ℹ️ The headers are **model-conditional**: the `7d_oi` (Current week (Fable)) window only comes back on a call to the **Fable model**, so the probe targets `claude-fable-5` — with the Claude Code system prompt an OAuth token needs on premium models. If that probe can't run (a plan without Fable, a capacity `429`), the app falls back to a 1-token **Haiku** probe: the 5-hour and weekly meters stay live and the Fable group hides until the window is visible again.
 
@@ -90,7 +90,7 @@ Per shown account: `name  ring NN% <pace>  W:MM% <pace>  F:KK% <pace>` — every
 - 🐾 **Clawd** strolls along — pace scales with your usage.
 - ⭕ The **ring** and first **%** are the 5-hour window; **`W:`** is the weekly window; **`F:`** is Current week (Fable) — hidden while it's unknown (Haiku fallback).
 - 🔥 The **pace glyph** (flame / equals / tortoise, monochrome) shows each window's burn pace vs an even burn; hidden while a window is too fresh to judge.
-- 🟠 → 🔴 Ring and % turn **red at 80%**, so you notice before you hit the wall.
+- 🟢 → 🟡 → 🔴 Ring, bar, and % are **colored by pace tier** (green slow · amber steady · red fast), and force **red at ≥80%** of any window — you notice the trajectory before you hit the wall, not just the level.
 - 🌫️ A segment **fades** when its data is stale (no successful refresh in ~10 min).
 - 🖱️ **Click** to open the panel: each account's **5-hour** and **weekly** meters, each showing the reset time and the pace — e.g. `resets in 3h · 🔥 fast · ~1h 10m left`.
 

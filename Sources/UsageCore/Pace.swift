@@ -21,6 +21,15 @@ public enum UsageWindow: Sendable {
 public struct Pace: Sendable, Equatable {
     public enum State: Sendable { case fast, steady, slow }
 
+    /// At/above this pace ratio the burn is `.fast` — ~5% over an even fill.
+    /// Tuned low (was 1.15) so the warning fires early enough to slow down
+    /// before the cap: a ratio of 1.0 already lands you at exactly 100% at reset.
+    public static let fastRatio = 1.05
+    /// At/below this ratio the burn is `.slow` (comfortably under even pace).
+    /// Tuned low (was 0.85) so "green/safe" requires a real margin, not just
+    /// being marginally under pace.
+    public static let slowRatio = 0.70
+
     /// utilization ÷ expected-for-elapsed-time. 1.0 = exactly even.
     public var ratio: Double
     public var state: State
@@ -45,7 +54,7 @@ public struct Pace: Sendable, Equatable {
         let elapsedFrac = min(1, max(0.001, elapsed / window.seconds))
         let expected = elapsedFrac * 100
         let ratio = expected > 0 ? percent / expected : 1
-        let state: State = ratio >= 1.15 ? .fast : (ratio <= 0.85 ? .slow : .steady)
+        let state: State = ratio >= fastRatio ? .fast : (ratio <= slowRatio ? .slow : .steady)
         let projected = min(999, percent / elapsedFrac)
 
         var timeToLimit: TimeInterval?
