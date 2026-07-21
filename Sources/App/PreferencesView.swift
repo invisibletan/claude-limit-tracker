@@ -26,6 +26,7 @@ struct PreferencesView: View {
     @AppStorage(PrefKey.fablePaceSlow) private var fablePaceSlow = true
     @AppStorage(PrefKey.fablePaceSteady) private var fablePaceSteady = true
     @AppStorage(PrefKey.fablePaceFast) private var fablePaceFast = true
+    @AppStorage(PrefKey.notifyPaceFast) private var notifyPaceFast = PrefKey.defaultNotifyPaceFast
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -156,6 +157,16 @@ struct PreferencesView: View {
                         .toggleStyle(.checkbox)
                     }
                     Text("The Fable-model weekly window (claude.ai's \"Current week (Fable)\"). Read from the same rate-limit headers via a 1-token Fable probe; if that probe can't run (plan without Fable, capacity), the app falls back to a Haiku probe and this group hides until the window is visible again.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Notifications") {
+                    Toggle("Notify when a limit crosses to Fast (and back below)", isOn: $notifyPaceFast)
+                        .onChange(of: notifyPaceFast) { _, enabled in
+                            if enabled { store.requestNotificationAuthorization() }
+                        }
+                    Text("A macOS notification fires the moment any window (5-hour, weekly, or Current week (Fable)) starts burning 🔥 Fast, and again when it eases back below Fast. macOS asks for notification permission the first time. A window resetting is not treated as \"back below Fast\".")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

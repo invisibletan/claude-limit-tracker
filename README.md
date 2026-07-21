@@ -25,6 +25,7 @@ A tiny, native macOS menu bar app. An animated pixel **Clawd** 🐾 walks across
 - 🔥 **Pace signal** — whether each window is burning **fast**, **steady**, or **slow**: monochrome flame / equals / tortoise glyphs right in the menu bar (they adapt to light/dark like system items), 🔥/😎/🐢 emoji with an estimated time-to-limit in the panel.
 - 🎛️ **Composable menu bar, per window** — each of the 5-hour and weekly windows gets two checkbox sets: **Elements** (Ring · Percent · Glyph) picks what renders, **Visible when pace is** (🐢 = 🔥) hides an account's whole group while its pace is an unchecked state — e.g. 🔥-only turns the bar into an attention-only display that stays silent until something burns.
 - 🧷 **Never-empty item** — hide everything and the mascot steps in; hide the mascot too and the ring returns. The menu bar item always stays clickable.
+- 🔔 **Fast-pace alerts** — opt-in macOS notifications the moment any window (5-hour, weekly, or Current week (Fable)) starts burning 🔥 **fast**, and again when it eases back below fast. A window resetting isn't treated as "back below fast" (no false all-clear), and pre-existing fast windows don't ambush you at launch.
 - 🌫️ **Staleness dimming** — if an account hasn't refreshed successfully for ~10 minutes, its whole segment fades so you know the numbers are old.
 - 📊 **All three limits at a glance** — 5-hour, weekly, and Current week (Fable) meters per account in a click-through panel; optional weekly and Fable rings on the bar.
 - 🎯 **Exact numbers** — the same figures as *claude.ai → Settings → Usage*, not an estimate.
@@ -121,6 +122,12 @@ Per shown account: `name  ring NN% <pace>  W:MM% <pace>  F:KK% <pace>` — every
 | **Visible when pace is** | 🐢 Slow · = Steady · 🔥 Fast | Filters the **whole group** by current pace — while a window's pace is an unchecked state, that account's group is hidden until the pace changes (unknown pace always shows). |
 
 > The **Current week (Fable)** group additionally hides whenever the Fable window is unknown (Haiku fallback in effect), so it never shows an empty placeholder.
+
+**Notifications**
+
+| Setting | What it does |
+| --- | --- |
+| **Notify when a limit crosses to Fast (and back below)** | A macOS notification the moment any window's burn pace crosses into 🔥 fast, and again when it eases back below. macOS asks permission the first time; a window reset is **not** a "back below fast" event. On by default. |
 
 **Behavior**
 
