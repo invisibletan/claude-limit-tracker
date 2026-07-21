@@ -1,23 +1,15 @@
 import AppKit
 import UsageCore
 
-/// Draws the Clawd mascot — a chunky coral pixel critter (wide body, side nubs,
-/// two big eyes, four stubby legs) — and, separately, the usage ring gauge that
-/// sits to its right in the menu bar.
+/// Composes the menu-bar label — the Clawd mascot (drawn by `ClawdSprite`) plus
+/// the per-account usage ring gauge that sits to its right.
 enum ClawdIcon {
-    static let coral = NSColor(srgbRed: 0xCC / 255, green: 0x6B / 255, blue: 0x4E / 255, alpha: 1)
-    static let eye = NSColor(srgbRed: 0.09, green: 0.07, blue: 0.06, alpha: 1)
-
-    // Grid = the reference sprite's measured pixels (176×120, ratio ≈ 1.467).
-    private static let gridW = 176.0
-    private static let gridH = 120.0
-
     /// Just the critter, animated by walk `phase` (0–1). Image is wider than tall.
     static func sprite(phase: Double, height: CGFloat) -> NSImage {
-        let width = height * CGFloat(gridW / gridH)
+        let width = height * CGFloat(ClawdSprite.gridW / ClawdSprite.gridH)
         return NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
-            drawClawd(ctx: ctx, rect: rect, phase: phase)
+            ClawdSprite.draw(ctx: ctx, rect: rect, phase: phase)
             return true
         }
     }
@@ -184,7 +176,7 @@ enum ClawdIcon {
         // a dynamic leg: when every segment is currently hidden, the mascot
         // shows regardless of its preference — the item must stay clickable.
         let mascotVisible = mascotPreferred || segments.isEmpty
-        let clawdWidth = mascotVisible ? height * CGFloat(gridW / gridH) : 0
+        let clawdWidth = mascotVisible ? height * CGFloat(ClawdSprite.gridW / ClawdSprite.gridH) : 0
 
         var total = clawdWidth
         for (i, seg) in segments.enumerated() { total += (i == 0 ? gapMascot : gapEntry) + seg.width }
@@ -192,7 +184,7 @@ enum ClawdIcon {
         return NSImage(size: NSSize(width: total, height: height), flipped: false) { rect in
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             if mascotVisible {
-                drawClawd(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
+                ClawdSprite.draw(ctx: ctx, rect: CGRect(x: 0, y: 0, width: clawdWidth, height: height), phase: phase)
             }
 
             var x = clawdWidth
@@ -289,42 +281,4 @@ enum ClawdIcon {
         }
     }
 
-    private static func drawClawd(ctx: CGContext, rect: CGRect, phase: Double) {
-        let px = rect.width / CGFloat(gridW)
-        let s = sin(phase * 2 * .pi)
-        let bob = s * 3.0   // in reference-pixel units
-
-        func fill(_ x: Double, _ y: Double, _ w: Double, _ h: Double) {
-            ctx.fill(CGRect(
-                x: rect.minX + CGFloat(x) * px,
-                y: rect.minY + CGFloat(y + bob) * px,
-                width: CGFloat(w) * px,
-                height: CGFloat(h) * px
-            ))
-        }
-
-        // Coordinates below are the reference sprite's exact measured pixels
-        // (y-up). Bands are 24px tall: legs 0–24, lower body, nubs 48–72,
-        // eyes 72–96, body top. Legs sit in two pairs with a wide centre gap.
-        coral.setFill()
-
-        // Legs — two pairs (inset from the edges) with a wide centre gap;
-        // groups alternate lifting to read as a walk.
-        let liftA = max(0, s) * 6
-        let liftB = max(0, -s) * 6
-        fill(33, 0 + liftA, 11, 24 - liftA)    // group A
-        fill(110, 0 + liftA, 11, 24 - liftA)
-        fill(55, 0 + liftB, 11, 24 - liftB)    // group B
-        fill(132, 0 + liftB, 11, 24 - liftB)
-
-        // Body + side nubs.
-        fill(22, 24, 131, 96)          // torso + head
-        fill(0, 48, 22, 24)            // left nub
-        fill(154, 48, 22, 24)          // right nub
-
-        // Eyes.
-        eye.setFill()
-        fill(44, 72, 11, 24)
-        fill(121, 72, 11, 24)
-    }
 }

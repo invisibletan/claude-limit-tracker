@@ -7,9 +7,14 @@ swift build -c release
 
 APP="build/Claude Usage Tracker.app"
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/ClaudeUsageTracker "$APP/Contents/MacOS/ClaudeUsageTracker"
+
+# App icon: generate AppIcon.icns from the shared ClawdSprite (same mascot as the
+# menu bar) so Finder / Notification Center / System Settings show a real icon.
+swiftc -O make-appicon.swift Sources/App/ClawdSprite.swift -o .build/appicon-gen
+.build/appicon-gen "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -24,6 +29,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <string>Claude Usage Tracker</string>
     <key>CFBundleDisplayName</key>
     <string>Claude Usage Tracker</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
