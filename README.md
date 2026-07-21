@@ -145,7 +145,8 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 **Project layout**
 
 - `Sources/UsageCore/` — the testable data core: fetch + parse rate-limit headers, build snapshots, compute pace, formatting, plus the menu bar composition model (`MenuBarConfig`, `PaceSelection`, never-empty guards, staleness rule, legacy-pref migration).
-- `Sources/App/` — the SwiftUI app: `MenuBarExtra`, Clawd mascot + token-stream segment drawing, panel, preferences, per-account store.
+- `Sources/App/` — the SwiftUI app: `MenuBarExtra`, `ClawdSprite` (the shared mascot pixel spec), `ClawdIcon` token-stream segment drawing, panel, preferences, per-account store.
+- `make-appicon.swift` — build-time app-icon generator. `build.sh` compiles it with `ClawdSprite.swift` and runs `iconutil` → `AppIcon.icns`, so the Finder / Notification Center icon is the **same** Clawd the menu bar draws and can't drift.
 - `Tests/UsageCoreTests/` — header-parsing (incl. the Fable `7d_oi` window + probe shape), snapshot, pace, menu-bar-layout, and migration tests (48 tests).
 
 > 🧪 `test.sh` adds flags so `swift-testing` links under **Command Line Tools only** (no full Xcode needed). With full Xcode, plain `swift test` works too.
