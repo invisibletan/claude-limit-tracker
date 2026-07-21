@@ -24,7 +24,7 @@ enum ClawdIcon {
 
     /// One composited image for the whole menu bar label — Clawd on the left,
     /// then one segment per visible account composed from the config's
-    /// elements: `[name] [session: ring % glyph] [W: ring % glyph]`. Pace
+    /// elements: `[name] [session: ring % glyph] [W: ring % glyph] [F: ring % glyph]`. Pace
     /// glyphs are monochrome SF Symbols (flame / equal / tortoise) tinted with
     /// the resolved label color — or, in `.ringTint` style, each window's ring
     /// stroke encodes its own pace tier. Percent text turns alarm red at the
@@ -141,10 +141,38 @@ enum ClawdIcon {
                 tokens += weekly
             }
 
+            // Fable weekly group ("F:") — same structure as weekly. Skipped
+            // entirely while the window is unknown (fallback probe): a "F:–%"
+            // placeholder would just be noise.
+            var fable: [Token] = []
+            if item.fableWeeklyPercent != nil, cfg.fablePace.showsGroup(for: item.fableWeeklyPace) {
+                if cfg.fableRing || cfg.fablePercent {
+                    fable.append(.text(NSAttributedString(string: "F:", attributes: weeklyLabelAttrs)))
+                    if cfg.fableRing {
+                        fable.append(.ring(percent: item.fableWeeklyPercent, color: Palette.nsColor(forPercent: item.fableWeeklyPercent)))
+                    }
+                    if cfg.fablePercent {
+                        if cfg.fableRing { fable.append(.gap(gapRingPct)) }
+                        fable.append(.text(NSAttributedString(string: Format.percent(item.fableWeeklyPercent), attributes: pctAttrs(item.fableWeeklyPercent))))
+                    }
+                }
+                if let glyph = glyphImage(item.fableWeeklyPace, enabled: cfg.fableGlyph) {
+                    if !fable.isEmpty { fable.append(.gap(gapPctGlyph)) }
+                    fable.append(.image(glyph))
+                }
+            }
+            if !fable.isEmpty {
+                if !tokens.isEmpty {
+                    let bareGlyphOnly = !(cfg.fableRing || cfg.fablePercent)
+                    tokens.append(.gap(bareGlyphOnly ? gapPctGlyph : gapWeekly))
+                }
+                tokens += fable
+            }
+
             // An account whose groups are all hidden (pace filter) disappears
             // entirely — a bare name with no data is noise, and dropping it
             // lets the mascot fallback fire when every account is filtered.
-            guard !(session.isEmpty && weekly.isEmpty) else { continue }
+            guard !(session.isEmpty && weekly.isEmpty && fable.isEmpty) else { continue }
             // Trim trailing gaps (defensive; group content follows the name).
             while case .some(.gap) = tokens.last { tokens.removeLast() }
             guard !tokens.isEmpty else { continue }

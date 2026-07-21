@@ -35,6 +35,24 @@ private func nearlyEqual(_ a: Double, _ b: Double, accuracy: Double = 0.01) -> B
         #expect(snapshot.weekly.percent == nil)     // no weekly window
         #expect(snapshot.activityLevel == 1)
     }
+
+    @Test func buildMapsFableWeeklyWhenPresent() {
+        let now = Date()
+        var official = usage(five: 32, week: 8, now: now)
+        official.windows.append(.init(key: "seven_day_oi", label: "Weekly limit (Fable)",
+                                      utilization: 78, resetsAt: now.addingTimeInterval(40 * 3600)))
+        let snapshot = SnapshotBuilder.build(from: official, now: now)
+        #expect(snapshot.fableWeekly?.percent == 78)
+        #expect(snapshot.fableWeekly?.resetText == "resets in 40h")
+    }
+
+    @Test func buildLeavesFableWeeklyNilWhenAbsent() {
+        // Fallback (Haiku) probes carry no 7d_oi window — the meter must stay
+        // nil (unknown), not render as 0%.
+        let now = Date()
+        let snapshot = SnapshotBuilder.build(from: usage(five: 32, week: 8, now: now), now: now)
+        #expect(snapshot.fableWeekly == nil)
+    }
 }
 
 @Suite struct FormattingTests {

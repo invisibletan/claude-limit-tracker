@@ -44,19 +44,26 @@ import Testing
         #expect(config.weeklyPercent)
         #expect(config.weeklyGlyph)
         #expect(config.weeklyPace == .all)
+        #expect(!config.fableRing)       // mirrors the weekly group's shipped look
+        #expect(config.fablePercent)
+        #expect(config.fableGlyph)
+        #expect(config.fablePace == .all)
     }
 }
 
 @Suite struct MenuBarLayoutTests {
     private func config(
         sessionRing: Bool = true, sessionPercent: Bool = true,
-        weeklyRing: Bool = false, weeklyPercent: Bool = true
+        weeklyRing: Bool = false, weeklyPercent: Bool = true,
+        fableRing: Bool = false, fablePercent: Bool = false
     ) -> MenuBarConfig {
         var c = MenuBarConfig()
         c.sessionRing = sessionRing
         c.sessionPercent = sessionPercent
         c.weeklyRing = weeklyRing
         c.weeklyPercent = weeklyPercent
+        c.fableRing = fableRing
+        c.fablePercent = fablePercent
         return c
     }
 
@@ -91,6 +98,17 @@ import Testing
         )
         #expect(!out.sessionRing)
         #expect(out.weeklyPercent)
+    }
+
+    @Test func fableStructuralElementIsASufficientAnchor() {
+        // A Fable percent alone anchors the item just like any other ring/percent.
+        let out = MenuBarLayout.effective(
+            config(sessionRing: false, sessionPercent: false, weeklyRing: false, weeklyPercent: false,
+                   fableRing: false, fablePercent: true),
+            mascotVisible: false
+        )
+        #expect(!out.sessionRing)
+        #expect(out.fablePercent)
     }
 
     @Test func mascotForcedWhenNoAccounts() {

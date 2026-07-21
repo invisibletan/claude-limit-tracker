@@ -24,6 +24,8 @@ public struct MenuBarEntry: Sendable, Equatable {
     public var sessionPace: Pace.State?
     public var weeklyPercent: Double?
     public var weeklyPace: Pace.State?
+    public var fableWeeklyPercent: Double?
+    public var fableWeeklyPace: Pace.State?
     /// Last successful fetch is too old — the segment renders dimmed.
     public var isStale: Bool
 
@@ -33,6 +35,8 @@ public struct MenuBarEntry: Sendable, Equatable {
         self.sessionPace = snapshot?.fiveHour.pace?.state
         self.weeklyPercent = snapshot?.weekly.percent
         self.weeklyPace = snapshot?.weekly.pace?.state
+        self.fableWeeklyPercent = snapshot?.fableWeekly?.percent
+        self.fableWeeklyPace = snapshot?.fableWeekly?.pace?.state
         self.isStale = isStale
     }
 }
@@ -41,13 +45,17 @@ public struct MenuBarEntry: Sendable, Equatable {
 public struct UsageSnapshot: Sendable {
     public var fiveHour: Meter
     public var weekly: Meter
+    /// "Current week (Fable)" — nil when the probe couldn't see the Fable
+    /// window (Haiku fallback, plan without Fable). Nil means unknown, not 0%.
+    public var fableWeekly: Meter?
     /// 0–1 signal driving the menu bar mascot's spin speed (higher = busier).
     public var activityLevel: Double
     public var updatedAt: Date
 
-    public init(fiveHour: Meter, weekly: Meter, activityLevel: Double = 0, updatedAt: Date) {
+    public init(fiveHour: Meter, weekly: Meter, fableWeekly: Meter? = nil, activityLevel: Double = 0, updatedAt: Date) {
         self.fiveHour = fiveHour
         self.weekly = weekly
+        self.fableWeekly = fableWeekly
         self.activityLevel = activityLevel
         self.updatedAt = updatedAt
     }

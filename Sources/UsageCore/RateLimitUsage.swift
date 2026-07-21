@@ -25,6 +25,10 @@ public struct OfficialUsage: Sendable {
 
     public var fiveHour: Window? { windows.first { $0.key == "five_hour" } }
     public var sevenDay: Window? { windows.first { $0.key == "seven_day" } }
+    /// The Fable-tier weekly window (wire prefix `7d_oi`, representative claim
+    /// `seven_day_overage_included`). Only present when the probe hit the Fable
+    /// model — claude.ai renders it as "Current week (Fable)".
+    public var fableWeekly: Window? { windows.first { $0.key == "seven_day_oi" } }
 
     /// Utilization arrives 0–1 in some payloads and 0–100 in others; normalize to 0–100.
     public static func normalizedPercent(_ raw: Double) -> Double {
@@ -65,13 +69,23 @@ public enum RateLimitUsage {
         let windows = [
             window(prefix: "5h", key: "five_hour", label: "5-hour limit"),
             window(prefix: "7d", key: "seven_day", label: "Weekly limit"),
+            window(prefix: "7d_oi", key: "seven_day_oi", label: "Weekly limit (Fable)"),
         ].compactMap { $0 }
 
         guard !windows.isEmpty else { throw RateLimitError.noHeaders }
         return OfficialUsage(windows: windows)
     }
 
-    public static func request(token: String) -> URLRequest {
+    /// Which model the 1-token probe calls. The Fable probe is primary — it is
+    /// the only call that returns the Fable weekly (`7d_oi`) window. Haiku is
+    /// the fallback that keeps the two headline meters alive when Fable is
+    /// unavailable (plan without Fable, model retired, capacity 429).
+    public enum Probe: Sendable {
+        case fable
+        case haiku
+    }
+
+    public static func request(token: String, probe: Probe = .haiku) -> URLRequest {
         var req = URLRequest(url: endpoint)
         req.httpMethod = "POST"
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -79,18 +93,52 @@ public enum RateLimitUsage {
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.timeoutInterval = 20
-        // Smallest possible call — one Haiku token — just to read the headers.
-        let body: [String: Any] = [
-            "model": "claude-haiku-4-5-20251001",
+        // Smallest possible call — one token — just to read the headers.
+        var body: [String: Any] = [
             "max_tokens": 1,
             "messages": [["role": "user", "content": "hi"]],
         ]
+        switch probe {
+        case .fable:
+            body["model"] = "claude-fable-5"
+            // OAuth inference tokens are gated to Claude-Code-shaped requests on
+            // premium models; without this system prompt the API answers with a
+            // headerless 429 instead of usage headers.
+            body["system"] = "You are Claude Code, Anthropic's official CLI for Claude."
+        case .haiku:
+            body["model"] = "claude-haiku-4-5-20251001"
+        }
         req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return req
     }
 
     public static func fetchUsage(token: String, session: URLSession = .shared) async throws -> OfficialUsage {
-        let (_, response) = try await session.data(for: request(token: token))
+        do {
+            return try await fetchUsage(token: token, probe: .fable, session: session)
+        } catch let error where shouldFallBackToHaiku(error) {
+            // The Fable window is unavailable (plan without Fable, capacity, or a
+            // missing/renamed model) — fall back so the 5-hour + weekly meters
+            // stay live. The Fable meter simply reads unknown.
+            return try await fetchUsage(token: token, probe: .haiku, session: session)
+        }
+    }
+
+    /// Whether a failed Fable probe is worth retrying on Haiku. Only signals that
+    /// mean "Fable *specifically* is unavailable" fall back: 403 (plan without
+    /// Fable), 404 (model retired/renamed), 429 (Fable-overage rejected), or no
+    /// usage headers. A bad token (401), a network failure, or a 5xx would fail
+    /// identically on Haiku, so those propagate immediately instead of doubling
+    /// the latency and burning a second doomed request.
+    static func shouldFallBackToHaiku(_ error: Error) -> Bool {
+        switch error {
+        case RateLimitError.httpStatus(let code): return code == 403 || code == 404 || code == 429
+        case RateLimitError.noHeaders: return true
+        default: return false
+        }
+    }
+
+    static func fetchUsage(token: String, probe: Probe, session: URLSession) async throws -> OfficialUsage {
+        let (_, response) = try await session.data(for: request(token: token, probe: probe))
         guard let http = response as? HTTPURLResponse else { throw RateLimitError.noHeaders }
         if http.statusCode != 200 { throw RateLimitError.httpStatus(http.statusCode) }
         var headers: [String: String] = [:]

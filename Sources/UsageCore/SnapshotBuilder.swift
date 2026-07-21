@@ -15,6 +15,9 @@ public enum SnapshotBuilder {
         return UsageSnapshot(
             fiveHour: meter(fiveHour, .fiveHour),
             weekly: meter(usage.sevenDay, .weekly),
+            // Absent window stays nil (unknown) — a fallback probe must not
+            // render the Fable meter as an empty 0%.
+            fableWeekly: usage.fableWeekly.map { meter($0, .weekly) },
             // Mascot spin tracks how full the 5-hour window is.
             activityLevel: min(1, max(0, (fiveHour?.utilization ?? 0) / 100)),
             updatedAt: now
