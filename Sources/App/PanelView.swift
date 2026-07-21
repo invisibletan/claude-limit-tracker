@@ -117,7 +117,7 @@ struct MeterView: View {
     let title: String
     let meter: Meter
 
-    private var barColor: Color { Palette.color(forPercent: meter.percent) }
+    private var barColor: Color { Palette.color(pace: meter.pace?.state, percent: meter.percent) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {

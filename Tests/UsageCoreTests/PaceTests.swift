@@ -51,6 +51,34 @@ import Testing
         let pace = try #require(Pace.compute(percent: 30, resetsAt: now.addingTimeInterval(6 * 86400), window: .weekly, now: now))
         #expect(pace.state == .fast)
     }
+
+    // MARK: lowered thresholds (conservative "prevent the limit" tuning).
+    // resetIn(4) on a 5h window → exactly 20% elapsed → expected = 20%, so
+    // ratio = percent / 20.
+
+    @Test func fastThresholdLowered() throws {
+        let now = Date()
+        let reset = resetIn(4, from: now)
+        // ratio 1.075 — below the OLD 1.15 fast cutoff (was steady), now flags fast.
+        #expect(try #require(Pace.compute(percent: 21.5, resetsAt: reset, window: .fiveHour, now: now)).state == .fast)
+        // ratio 1.02 stays steady (under the new 1.05 cutoff).
+        #expect(try #require(Pace.compute(percent: 20.4, resetsAt: reset, window: .fiveHour, now: now)).state == .steady)
+    }
+
+    @Test func slowThresholdLowered() throws {
+        let now = Date()
+        let reset = resetIn(4, from: now)
+        // ratio 0.75 — below the OLD 0.85 slow cutoff (was slow/green), now reads
+        // steady: the green "safe" zone shrinks, so you feel safe less easily.
+        #expect(try #require(Pace.compute(percent: 15.0, resetsAt: reset, window: .fiveHour, now: now)).state == .steady)
+        // ratio 0.65 is still slow (under the new 0.70 cutoff).
+        #expect(try #require(Pace.compute(percent: 13.0, resetsAt: reset, window: .fiveHour, now: now)).state == .slow)
+    }
+
+    @Test func thresholdConstants() {
+        #expect(Pace.fastRatio == 1.05)
+        #expect(Pace.slowRatio == 0.70)
+    }
 }
 
 @Suite struct PaceFormattingTests {
