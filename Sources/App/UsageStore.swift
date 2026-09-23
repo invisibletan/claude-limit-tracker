@@ -50,12 +50,12 @@ final class UsageStore: ObservableObject {
     @Published var accounts: [Account] = AccountStore.load()
     @Published var usage: [UUID: AccountUsage] = [:]
     @Published var isRefreshing = false
-    /// Current frame of the walking menu bar mascot (+ per-account rings).
-    @Published var iconImage: NSImage?
+    /// Owns the 15fps mascot/ring animation frame. A plain `let`, NOT
+    /// `@Published` — the App struct's Scene body must never depend on
+    /// per-frame state (see MenuBarIconModel.swift).
+    let iconModel = MenuBarIconModel()
 
     private var pollTask: Task<Void, Never>?
-    private var animationTask: Task<Void, Never>?
-    private var walkPhase = 0.0
 
     /// Last-seen pace state per account per window, for Fast-crossing alerts.
     /// An account is absent until its first successful refresh (which seeds it
@@ -119,18 +119,18 @@ final class UsageStore: ObservableObject {
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
-        animationTask = Task { [weak self] in
-            let frame = 1.0 / 15.0
-            while !Task.isCancelled {
-                self?.advanceWalk(dt: frame)
-                try? await Task.sleep(for: .seconds(frame))
+        iconModel.start(
+            activity: { [weak self] in self?.currentActivity() ?? 0 },
+            render: { [weak self] phase in
+                self?.renderFrame(phase: phase) ?? ClawdIcon.menuBarImage(entries: [], phase: phase, height: 20, config: MenuBarConfig())
             }
-        }
+        )
     }
 
     deinit {
         pollTask?.cancel()
-        animationTask?.cancel()
+        // `iconModel`'s own deinit cancels its animation task (nonisolated,
+        // like `pollTask?.cancel()` above) once ARC releases it here.
     }
 
     // MARK: Account management
@@ -198,13 +198,18 @@ final class UsageStore: ObservableObject {
         return config
     }
 
-    private func advanceWalk(dt: Double) {
+    /// 0...1 walk-speed driver for `MenuBarIconModel` — highest visible
+    /// 5-hour usage across accounts. Plain method, not `@Published`: called
+    /// once per frame from the icon model's own task, never from a View body.
+    private func currentActivity() -> Double {
         let visiblePercents = accounts.filter(\.showInMenuBar)
             .compactMap { usage[$0.id]?.snapshot?.fiveHour.percent }
-        let activity = min(1, max(0, (visiblePercents.max() ?? 0) / 100))
-        let cyclesPerSecond = 0.6 + activity * 2.6   // gentle amble → brisk march
-        walkPhase = (walkPhase + cyclesPerSecond * dt).truncatingRemainder(dividingBy: 1)
-        iconImage = ClawdIcon.menuBarImage(entries: menuBarEntries, phase: walkPhase, height: 20, config: menuBarConfig)
+        return min(1, max(0, (visiblePercents.max() ?? 0) / 100))
+    }
+
+    /// Composites one frame at the given walk `phase` for `MenuBarIconModel`.
+    private func renderFrame(phase: Double) -> NSImage {
+        ClawdIcon.menuBarImage(entries: menuBarEntries, phase: phase, height: 20, config: menuBarConfig)
     }
 
     // MARK: Refresh
