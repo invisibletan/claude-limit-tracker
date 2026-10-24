@@ -47,11 +47,17 @@ public struct Pace: Sendable, Equatable {
     }
 
     public static func compute(percent: Double, resetsAt: Date, window: UsageWindow, now: Date = Date()) -> Pace? {
-        let windowStart = resetsAt.addingTimeInterval(-window.seconds)
+        compute(percent: percent, resetsAt: resetsAt, windowSeconds: window.seconds, now: now)
+    }
+
+    /// Same as above for a window of any length (Codex reports its own lengths).
+    public static func compute(percent: Double, resetsAt: Date, windowSeconds: Double, now: Date = Date()) -> Pace? {
+        guard windowSeconds > 0 else { return nil }
+        let windowStart = resetsAt.addingTimeInterval(-windowSeconds)
         let elapsed = now.timeIntervalSince(windowStart)
         // Too early in the window (or clock skew) to say anything meaningful.
         guard elapsed > 60 else { return nil }
-        let elapsedFrac = min(1, max(0.001, elapsed / window.seconds))
+        let elapsedFrac = min(1, max(0.001, elapsed / windowSeconds))
         let expected = elapsedFrac * 100
         let ratio = expected > 0 ? percent / expected : 1
         let state: State = ratio >= fastRatio ? .fast : (ratio <= slowRatio ? .slow : .steady)

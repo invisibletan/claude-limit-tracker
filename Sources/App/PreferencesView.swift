@@ -27,6 +27,8 @@ struct PreferencesView: View {
     @AppStorage(PrefKey.fablePaceSteady) private var fablePaceSteady = true
     @AppStorage(PrefKey.fablePaceFast) private var fablePaceFast = true
     @AppStorage(PrefKey.notifyPaceFast) private var notifyPaceFast = PrefKey.defaultNotifyPaceFast
+    @AppStorage(PrefKey.trackCodex) private var trackCodex = PrefKey.defaultTrackCodex
+    @AppStorage(PrefKey.showCodexInMenuBar) private var showCodexInMenuBar = PrefKey.defaultShowCodexInMenuBar
 
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var launchError: String?
@@ -89,6 +91,23 @@ struct PreferencesView: View {
                     }
 
                     Text("Run `claude setup-token` in a terminal and paste the result. Each account reads its own exact 5-hour and weekly limits from Anthropic's rate-limit headers. Tokens are per-account, stored in a chmod-600 file, never the Keychain.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Codex") {
+                    Toggle("Track Codex usage", isOn: $trackCodex)
+                        .onChange(of: trackCodex) { _, enabled in
+                            if enabled { Task { await store.refresh() } } else { store.codex = nil }
+                        }
+                    Toggle("Show on menu bar (CX)", isOn: $showCodexInMenuBar)
+                        .disabled(!trackCodex)
+                    if trackCodex, let status = codexStatus {
+                        Text(status.text).font(.caption)
+                            .foregroundStyle(status.isError ? .red : .green)
+                            .textSelection(.enabled)
+                    }
+                    Text("Shows the same limits as `codex /status` (5-hour and weekly) by asking your installed Codex CLI — sign in once with `codex login`. Codex keeps its own sign-in; this app never reads or stores OpenAI credentials. The CX segment follows the Session and Weekly element settings below.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -192,6 +211,13 @@ struct PreferencesView: View {
         }
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var codexStatus: (text: String, isError: Bool)? {
+        guard let codex = store.codex else { return nil }
+        if let error = codex.error { return (error, true) }
+        guard let snapshot = codex.snapshot else { return nil }
+        return ("Connected" + (snapshot.planName.map { " · \($0) plan" } ?? ""), false)
     }
 
     private func remove(_ account: Account) {

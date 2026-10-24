@@ -28,8 +28,15 @@ public struct MenuBarEntry: Sendable, Equatable {
     public var fableWeeklyPace: Pace.State?
     /// Last successful fetch is too old — the segment renders dimmed.
     public var isStale: Bool
+    /// Fixed segment label drawn regardless of the names toggle ("CX" for Codex).
+    public var tag: String?
+    /// False when the source has no weekly window — the W: group is skipped
+    /// instead of rendering a "W:–%" placeholder.
+    public var showsWeekly: Bool
 
-    public init(name: String?, snapshot: UsageSnapshot?, isStale: Bool = false) {
+    public init(name: String?, snapshot: UsageSnapshot?, isStale: Bool = false, tag: String? = nil, showsWeekly: Bool = true) {
+        self.tag = tag
+        self.showsWeekly = showsWeekly
         self.name = name
         self.sessionPercent = snapshot?.fiveHour.percent
         self.sessionPace = snapshot?.fiveHour.pace?.state

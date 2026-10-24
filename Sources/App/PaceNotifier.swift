@@ -47,12 +47,15 @@ final class PaceNotifier {
 /// The two label forms used in a pace notification, per window.
 enum PaceWindowLabel {
     case session, weekly, fable
+    /// A full title, e.g. "Codex 5-hour limit".
+    case custom(String)
 
     var short: String {
         switch self {
         case .session: return "5-hour limit"
         case .weekly: return "Weekly limit"
         case .fable: return "Current week (Fable)"
+        case .custom(let title): return title
         }
     }
     /// Currently the same as `short`; kept separate so the title (short) and body

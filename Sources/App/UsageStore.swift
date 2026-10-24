@@ -37,6 +37,10 @@ enum PrefKey {
     static let fablePaceFast = "showMenuBarFablePaceFast"
     static let notifyPaceFast = "notifyPaceFast"
     static let defaultNotifyPaceFast = true
+    static let trackCodex = "trackCodex"
+    static let defaultTrackCodex = true
+    static let showCodexInMenuBar = "showCodexInMenuBar"
+    static let defaultShowCodexInMenuBar = true
 }
 
 /// Fetched usage for one account.
@@ -45,10 +49,20 @@ struct AccountUsage {
     var error: String?
 }
 
+/// Codex usage read through the local Codex CLI. `isInstalled == false` keeps
+/// Codex out of the panel for people who don't use it.
+struct CodexUsageState {
+    var snapshot: CodexSnapshot?
+    var error: String?
+    var isInstalled = true
+}
+
 @MainActor
 final class UsageStore: ObservableObject {
     @Published var accounts: [Account] = AccountStore.load()
     @Published var usage: [UUID: AccountUsage] = [:]
+    /// nil while Codex tracking is off.
+    @Published var codex: CodexUsageState?
     @Published var isRefreshing = false
     /// Owns the 15fps mascot/ring animation frame. A plain `let`, NOT
     /// `@Published` — the App struct's Scene body must never depend on
@@ -61,6 +75,7 @@ final class UsageStore: ObservableObject {
     /// An account is absent until its first successful refresh (which seeds it
     /// silently); only later transitions notify.
     private var paceMemory: [UUID: WindowPaceStates] = [:]
+    private var codexPaceMemory: WindowPaceStates?
     private let notifier = PaceNotifier()
 
     var hasAccounts: Bool { !accounts.isEmpty }
@@ -108,6 +123,8 @@ final class UsageStore: ObservableObject {
             PrefKey.fablePaceSteady: true,
             PrefKey.fablePaceFast: true,
             PrefKey.notifyPaceFast: PrefKey.defaultNotifyPaceFast,
+            PrefKey.trackCodex: PrefKey.defaultTrackCodex,
+            PrefKey.showCodexInMenuBar: PrefKey.defaultShowCodexInMenuBar,
         ])
         if defaults.bool(forKey: PrefKey.notifyPaceFast) {
             notifier.requestAuthorization()
@@ -157,7 +174,7 @@ final class UsageStore: ObservableObject {
         let namesOn = UserDefaults.standard.bool(forKey: PrefKey.showMenuBarNames)
         let showNames = namesOn && visible.count > 1
         let interval = max(10.0, UserDefaults.standard.double(forKey: PrefKey.refreshInterval))
-        return visible.map { account in
+        var entries = visible.map { account in
             let snapshot = usage[account.id]?.snapshot
             return MenuBarEntry(
                 name: showNames ? account.name : nil,
@@ -165,6 +182,16 @@ final class UsageStore: ObservableObject {
                 isStale: Staleness.isStale(lastSuccess: snapshot?.updatedAt, refreshInterval: interval)
             )
         }
+        if let codexSnapshot = codex?.snapshot, UserDefaults.standard.bool(forKey: PrefKey.showCodexInMenuBar) {
+            entries.append(MenuBarEntry(
+                name: nil,
+                snapshot: codexSnapshot.usage,
+                isStale: Staleness.isStale(lastSuccess: codexSnapshot.usage.updatedAt, refreshInterval: interval),
+                tag: "CX",
+                showsWeekly: codexSnapshot.weeklyTitle != nil
+            ))
+        }
+        return entries
     }
 
     private var menuBarConfig: MenuBarConfig {
@@ -220,6 +247,7 @@ final class UsageStore: ObservableObject {
         defer { isRefreshing = false }
 
         let current = accounts
+        async let codexResult = Self.fetchCodex(enabled: UserDefaults.standard.bool(forKey: PrefKey.trackCodex))
         let results = await withTaskGroup(of: (UUID, AccountUsage).self) { group in
             for account in current {
                 group.addTask {
@@ -250,7 +278,38 @@ final class UsageStore: ObservableObject {
         merged = merged.filter { id, _ in current.contains { $0.id == id } }
         usage = merged
 
+        let codexFresh = await codexResult
+        mergeCodex(codexFresh)
+
         detectPaceCrossings(results: results, accounts: current)
+        detectCodexPaceCrossings(codexFresh?.snapshot)
+    }
+
+    nonisolated private static func fetchCodex(enabled: Bool) async -> CodexUsageState? {
+        guard enabled else { return nil }
+        do {
+            let limits = try await CodexAppServer.fetchRateLimits()
+            return CodexUsageState(snapshot: CodexSnapshot.build(from: limits), error: nil)
+        } catch CodexError.notInstalled {
+            return CodexUsageState(snapshot: nil, error: CodexError.notInstalled.localizedDescription, isInstalled: false)
+        } catch {
+            return CodexUsageState(snapshot: nil, error: error.localizedDescription)
+        }
+    }
+
+    private func mergeCodex(_ fresh: CodexUsageState?) {
+        // Re-read the toggle: it may have been switched off while this refresh ran.
+        guard let fresh, UserDefaults.standard.bool(forKey: PrefKey.trackCodex) else {
+            codex = nil
+            codexPaceMemory = nil
+            return
+        }
+        // Same policy as accounts: an error keeps the last good numbers.
+        if fresh.snapshot == nil, let previous = codex?.snapshot {
+            codex = CodexUsageState(snapshot: previous, error: fresh.error, isInstalled: fresh.isInstalled)
+        } else {
+            codex = fresh
+        }
     }
 
     // MARK: Fast-pace notifications
@@ -281,6 +340,25 @@ final class UsageStore: ObservableObject {
         }
         // Forget removed accounts so a re-add starts from a clean baseline.
         paceMemory = paceMemory.filter { id, _ in current.contains { $0.id == id } }
+    }
+
+    /// Codex gets the same Fast-crossing alerts, titled with its own window names.
+    private func detectCodexPaceCrossings(_ snapshot: CodexSnapshot?) {
+        guard let snapshot, codex != nil else { return }
+        let next = WindowPaceStates(
+            session: snapshot.usage.fiveHour.pace?.state,
+            weekly: snapshot.weeklyTitle == nil ? nil : snapshot.usage.weekly.pace?.state,
+            fable: nil
+        )
+        if UserDefaults.standard.bool(forKey: PrefKey.notifyPaceFast) {
+            for crossing in PaceAlerts.crossings(from: codexPaceMemory, to: next) {
+                let isSession = crossing.window == .session
+                let title = isSession ? snapshot.sessionTitle : (snapshot.weeklyTitle ?? "")
+                let meter = isSession ? snapshot.usage.fiveHour : snapshot.usage.weekly
+                notifier.notify(crossing.alert, accountName: nil, window: .custom("Codex \(title)"), percent: meter.percent)
+            }
+        }
+        codexPaceMemory = next
     }
 
     private func label(_ window: PaceWindow) -> PaceWindowLabel {
