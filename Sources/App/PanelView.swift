@@ -5,6 +5,7 @@ import UsageCore
 struct PanelView: View {
     @ObservedObject var store: UsageStore
     @Environment(\.openSettings) private var openSettings
+    @AppStorage(PrefKey.showCodexInMenuBar) private var showCodexInMenuBar = PrefKey.defaultShowCodexInMenuBar
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -21,6 +22,11 @@ struct PanelView: View {
                 }
             }
 
+            if showsCodex, let codex = store.codex {
+                Divider()
+                codexSection(codex)
+            }
+
             Divider()
             actions
         }
@@ -32,7 +38,8 @@ struct PanelView: View {
     private func accountSection(_ account: Account) -> some View {
         let entry = store.usage[account.id]
         VStack(alignment: .leading, spacing: 6) {
-            if store.accounts.count > 1 {
+            // With Codex below, even a single account needs its label.
+            if store.accounts.count > 1 || showsCodex {
                 HStack(spacing: 5) {
                     if account.showInMenuBar {
                         Circle().fill(Color.secondary).frame(width: 5, height: 5)
@@ -59,12 +66,53 @@ struct PanelView: View {
         }
     }
 
+    /// Codex appears once tracking is on and the CLI is installed (or it has numbers to keep).
+    private var showsCodex: Bool {
+        guard let codex = store.codex else { return false }
+        return codex.isInstalled || codex.snapshot != nil
+    }
+
+    @ViewBuilder
+    private func codexSection(_ codex: CodexUsageState) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                if showCodexInMenuBar {
+                    Circle().fill(Color.secondary).frame(width: 5, height: 5)
+                }
+                Text(["Codex", codex.snapshot?.planName].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            if let snapshot = codex.snapshot {
+                MeterView(title: snapshot.sessionTitle, meter: snapshot.usage.fiveHour)
+                if let weeklyTitle = snapshot.weeklyTitle {
+                    MeterView(title: weeklyTitle, meter: snapshot.usage.weekly)
+                }
+                if let reached = snapshot.limitReachedText {
+                    Text(reached).font(.caption).foregroundStyle(.red)
+                }
+            }
+            // Unlike accounts, the error shows under kept numbers too — a
+            // signed-out Codex shouldn't look like a frozen meter.
+            if let error = codex.error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            } else if codex.snapshot == nil {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading…").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
     private var header: some View {
         HStack(alignment: .center) {
             ClawdView(size: 20)
             Text("Claude Usage").font(.headline)
             Spacer()
-            if let updated = store.usage.values.compactMap({ $0.snapshot?.updatedAt }).max() {
+            let updates = store.usage.values.compactMap { $0.snapshot?.updatedAt }
+                + [store.codex?.snapshot?.usage.updatedAt].compactMap { $0 }
+            if let updated = updates.max() {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(Format.updatedAgo(updated, now: context.date))
                         .font(.caption2)

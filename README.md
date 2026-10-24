@@ -1,6 +1,6 @@
 # 🐾 Claude Usage Tracker
 
-> Keep your Claude **5-hour**, **weekly**, and **Current week (Fable)** usage limits one glance away — right in your macOS menu bar.
+> Keep your Claude **5-hour**, **weekly**, and **Current week (Fable)** usage limits one glance away — right in your macOS menu bar. Use OpenAI's **Codex** too? Its limits sit right next to them.
 
 ![macOS](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)
 ![Swift](https://img.shields.io/badge/Swift-5-F05138?logo=swift&logoColor=white)
@@ -22,6 +22,7 @@ A tiny, native macOS menu bar app. An animated pixel **Clawd** 🐾 walks across
 - 🐾 **Animated Clawd mascot** — walks faster the harder you're using Claude.
 - ⭕ **Usage ring, colored by pace** — the ring fills with your usage and is **tinted by burn pace, not raw percent**: 🟢 green when slow, 🟡 amber when steady, 🔴 red when fast — so a fast burn warns you *before* you're near the cap. Any window at **≥80%** goes red regardless of pace (the % text turns red too).
 - 👥 **Multiple accounts** — track up to **10** Claude accounts side by side; show or hide each one on the menu bar.
+- 🤖 **Codex too** — if the Codex CLI is installed and signed in, its **5-hour** and **weekly** limits (the same numbers `codex /status` shows) appear as a `CX` segment on the bar and a Codex section in the panel, with the same pace colors and Fast alerts.
 - 🔥 **Pace signal** — whether each window is burning **fast**, **steady**, or **slow**: monochrome flame / equals / tortoise glyphs right in the menu bar (they adapt to light/dark like system items), 🔥/😎/🐢 emoji with an estimated time-to-limit in the panel.
 - 🎛️ **Composable menu bar, per window** — each of the 5-hour and weekly windows gets two checkbox sets: **Elements** (Ring · Percent · Glyph) picks what renders, **Visible when pace is** (🐢 = 🔥) hides an account's whole group while its pace is an unchecked state — e.g. 🔥-only turns the bar into an attention-only display that stays silent until something burns.
 - 🧷 **Never-empty item** — hide everything and the mascot steps in; hide the mascot too and the ring returns. The menu bar item always stays clickable.
@@ -60,6 +61,8 @@ The account's real percentages appear right away. Repeat for up to **10** accoun
 
 > 🔐 Tokens are per-account — everyone generates their own; you can't share one.
 
+**Codex (optional)** — install the [Codex CLI](https://github.com/openai/codex) (`brew install codex` or `npm i -g @openai/codex`) and run **`codex login`** once (sign in with ChatGPT). That's it: the `CX` segment shows up on the next refresh. No token to paste — Codex keeps its own sign-in.
+
 ---
 
 ## 🧠 How it works
@@ -81,6 +84,8 @@ The **pace** is derived locally: it compares how much you've used against how fa
 
 *Technique credit: [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter).*
 
+**Codex** is read through your own Codex CLI: each refresh starts `codex app-server` (the JSON-RPC server Codex's IDE extensions use), sends `initialize` + `account/rateLimits/read`, takes the reply — the same windows `codex /status` shows, with their real lengths and reset times — and closes it (~0.5 s). Codex handles sign-in and token refresh itself, so the tracker never reads or stores OpenAI credentials. The app finds `codex` on `PATH` or in the usual spots (Homebrew, `~/.local/bin`, npm/bun/volta/nvm) and hands it a `PATH` that can find `node`, since a menu bar app launched by `launchd` only gets `/usr/bin:/bin:/usr/sbin:/sbin`. Not installed → Codex simply stays out of the panel; signed out → the panel says to run `codex login`.
+
 ---
 
 ## 🖥️ In the menu bar
@@ -89,6 +94,7 @@ Per shown account: `name  ring NN% <pace>  W:MM% <pace>  F:KK% <pace>` — every
 
 - 🐾 **Clawd** strolls along — pace scales with your usage.
 - ⭕ The **ring** and first **%** are the 5-hour window; **`W:`** is the weekly window; **`F:`** is Current week (Fable) — hidden while it's unknown (Haiku fallback).
+- 🤖 **`CX`** marks the Codex segment (after your Claude accounts): its ring and % are Codex's 5-hour window, `W:` its weekly window — drawn with the same Session/Weekly element settings.
 - 🔥 The **pace glyph** (flame / equals / tortoise, monochrome) shows each window's burn pace vs an even burn; hidden while a window is too fresh to judge.
 - 🟢 → 🟡 → 🔴 Ring, bar, and % are **colored by pace tier** (green slow · amber steady · red fast), and force **red at ≥80%** of any window — you notice the trajectory before you hit the wall, not just the level.
 - 🌫️ A segment **fades** when its data is stale (no successful refresh in ~10 min).
@@ -106,6 +112,13 @@ Per shown account: `name  ring NN% <pace>  W:MM% <pace>  F:KK% <pace>` — every
 | **Name** | Rename any account inline. |
 | **Menu bar** | Per-account toggle — show or hide that account's ring on the menu bar. |
 | **🗑️** | Remove an account. |
+
+**Codex**
+
+| Setting | What it does |
+| --- | --- |
+| **Track Codex usage** | Read Codex limits through the local Codex CLI. On by default; harmless without Codex installed (nothing shows). |
+| **Show on menu bar (CX)** | Show or hide the `CX` segment (the panel keeps the Codex section). Handy on a crowded notched menu bar. |
 
 **Menu bar**
 
@@ -154,7 +167,8 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 - `Sources/UsageCore/` — the testable data core: fetch + parse rate-limit headers, build snapshots, compute pace, formatting, plus the menu bar composition model (`MenuBarConfig`, `PaceSelection`, never-empty guards, staleness rule, legacy-pref migration).
 - `Sources/App/` — the SwiftUI app: `MenuBarExtra`, `ClawdSprite` (the shared mascot pixel spec), `ClawdIcon` token-stream segment drawing, panel, preferences, per-account store.
 - `make-appicon.swift` — build-time app-icon generator. `build.sh` compiles it with `ClawdSprite.swift` and runs `iconutil` → `AppIcon.icns`, so the Finder / Notification Center icon is the **same** Clawd the menu bar draws and can't drift.
-- `Tests/UsageCoreTests/` — header-parsing (incl. the Fable `7d_oi` window + probe shape), snapshot, pace, menu-bar-layout, and migration tests (48 tests).
+- `Sources/UsageCore/CodexUsage.swift` — Codex: `account/rateLimits/read` parsing, window → meter mapping (pace from each window's real length), locating `codex`, and the stdio JSON-RPC session.
+- `Tests/UsageCoreTests/` — header-parsing (incl. the Fable `7d_oi` window + probe shape), snapshot, pace, menu-bar-layout, migration, and Codex tests — the Codex ones drive fake `codex` scripts over real pipes (100 tests).
 
 > 🧪 `test.sh` adds flags so `swift-testing` links under **Command Line Tools only** (no full Xcode needed). With full Xcode, plain `swift test` works too.
 
@@ -165,6 +179,7 @@ swift run        # ▶️  run unbundled (menu bar item appears; launch-at-login
 - 🍎 **macOS 14+**
 - 🧰 **Xcode Command Line Tools** (Swift 5.9+) — full Xcode *not* required.
 - 🔑 A **Claude subscription + Claude Code** (for `claude setup-token`) to see live data.
+- 🤖 *Optional:* the **Codex CLI**, signed in with ChatGPT (`codex login`), for the Codex segment.
 
 ---
 

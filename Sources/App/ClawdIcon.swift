@@ -16,7 +16,8 @@ enum ClawdIcon {
 
     /// One composited image for the whole menu bar label — Clawd on the left,
     /// then one segment per visible account composed from the config's
-    /// elements: `[name] [session: ring % glyph] [W: ring % glyph] [F: ring % glyph]`. Pace
+    /// elements: `[name] [tag] [session: ring % glyph] [W: ring % glyph] [F: ring % glyph]`
+    /// (Codex appends one more segment tagged "CX"). Pace
     /// glyphs are monochrome SF Symbols (flame / equal / tortoise) tinted with
     /// the resolved label color. Each window's ring stroke is colored by its pace
     /// tier (green slow / amber steady / red fast-or-near-cap); percent text turns
@@ -86,6 +87,9 @@ enum ClawdIcon {
         for item in items {
             var tokens: [Token] = []
             if let name = nameString(item.name) { tokens += [.text(name), .gap(gapNameRing)] }
+            if let tag = item.tag {
+                tokens += [.text(NSAttributedString(string: tag, attributes: weeklyLabelAttrs)), .gap(gapNameRing)]
+            }
 
             // Session group: ring, percent, pace glyph — rendered only while
             // the window's current pace is a checked state (or still unknown).
@@ -109,7 +113,7 @@ enum ClawdIcon {
             // (ring/percent); a glyph-only weekly stays bare, trailing the
             // session group like a second pace column.
             var weekly: [Token] = []
-            if cfg.weeklyPace.showsGroup(for: item.weeklyPace) {
+            if item.showsWeekly, cfg.weeklyPace.showsGroup(for: item.weeklyPace) {
                 if cfg.weeklyRing || cfg.weeklyPercent {
                     weekly.append(.text(NSAttributedString(string: "W:", attributes: weeklyLabelAttrs)))
                     if cfg.weeklyRing {
